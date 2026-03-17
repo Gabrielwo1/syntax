@@ -112,6 +112,25 @@ export interface RepoItem {
   mimeType?: string
 }
 
+export interface ArtRequest {
+  id: string
+  client: string
+  format: string
+  deadline?: string
+  description?: string
+  status: 'pendente' | 'em_andamento' | 'entregue'
+  createdAt: string
+  updatedAt?: string
+}
+
+export interface DeliveredArt {
+  id: string
+  title?: string
+  path: string
+  createdAt: string
+  mimeType?: string
+}
+
 export interface AppUser {
   id: string
   email: string
@@ -373,4 +392,48 @@ export const repoApi = {
 
   delete: (id: string) =>
     apiFetch(`/repo/${id}`, { method: 'DELETE' }),
+}
+
+// ── Social Media ──────────────────────────────────────────────────────────────
+
+export const socialApi = {
+  listRequests: () => apiFetch<{ requests: ArtRequest[] }>('/social/requests'),
+
+  createRequest: (data: {
+    client: string
+    format: string
+    deadline?: string
+    description?: string
+  }) =>
+    apiFetch('/social/requests', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateRequest: (id: string, data: Partial<ArtRequest>) =>
+    apiFetch(`/social/requests/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  deleteRequest: (id: string) =>
+    apiFetch(`/social/requests/${id}`, { method: 'DELETE' }),
+
+  listArts: () => apiFetch<{ arts: DeliveredArt[] }>('/social/arts'),
+
+  uploadArt: async (file: File, title?: string) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (title) formData.append('title', title)
+    return apiFetch('/social/arts', {
+      method: 'POST',
+      body: formData,
+    }, true)
+  },
+
+  getArtUrl: (path: string) =>
+    apiFetch<{ signedUrl: string }>(`/social/arts/url?path=${encodeURIComponent(path)}`),
+
+  deleteArt: (id: string) =>
+    apiFetch(`/social/arts/${id}`, { method: 'DELETE' }),
 }

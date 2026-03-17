@@ -42,6 +42,7 @@ import Tasks from './pages/Tasks'
 import PDFs from './pages/PDFs'
 import Repository from './pages/Repository'
 import Users from './pages/Users'
+import SocialMedia from './pages/SocialMedia'
 
 function LoadingSpinner() {
   return (
@@ -136,6 +137,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Repository />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/social-media"
+        element={
+          <ProtectedRoute>
+            <SocialMedia />
           </ProtectedRoute>
         }
       />

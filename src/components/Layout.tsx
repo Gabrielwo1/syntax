@@ -14,6 +14,7 @@ import {
   X,
   ChevronRight,
   Zap,
+  Share2,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { toast } from 'sonner'
@@ -34,6 +35,7 @@ const navItems: NavItem[] = [
   { to: '/tarefas', label: 'Tarefas', icon: <CheckSquare size={18} />, permission: 'tarefas' },
   { to: '/pdfs', label: 'PDFs', icon: <FileText size={18} />, permission: 'pdfs' },
   { to: '/repositorio', label: 'Repositório', icon: <Image size={18} />, permission: 'repositorio' },
+  { to: '/social-media', label: 'Social Media', icon: <Share2 size={18} />, permission: 'social_media' },
   { to: '/usuarios', label: 'Usuários', icon: <Users size={18} />, adminOnly: true },
 ]
 
