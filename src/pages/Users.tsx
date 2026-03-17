@@ -44,14 +44,14 @@ const EMPTY_FORM: UserFormData = {
 function RoleBadge({ role }: { role?: string }) {
   if (role === 'admin') {
     return (
-      <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full bg-violet-100 text-violet-700">
+      <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400">
         <ShieldCheck size={11} />
         Admin
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+    <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400">
       <User size={11} />
       Membro
     </span>
@@ -133,30 +133,30 @@ function UserModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-5 border-b border-slate-100">
-          <h2 className="font-semibold text-slate-800">{isEdit ? 'Editar Usuário' : 'Novo Usuário'}</h2>
-          <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+      <div className="bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-5 border-b border-zinc-800">
+          <h2 className="font-semibold text-zinc-50">{isEdit ? 'Editar Usuário' : 'Novo Usuário'}</h2>
+          <button onClick={onClose} className="p-1 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800">
             <X size={18} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-4">
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Nome *</label>
+            <label className="block text-xs font-medium text-zinc-300 mb-1">Nome *</label>
             <input
               value={form.name}
               onChange={e => set('name', e.target.value)}
               required
               placeholder="Nome completo"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">E-mail *</label>
+            <label className="block text-xs font-medium text-zinc-300 mb-1">E-mail *</label>
             <div className="relative">
-              <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
               <input
                 value={form.email}
                 onChange={e => set('email', e.target.value)}
@@ -164,38 +164,38 @@ function UserModal({
                 type="email"
                 disabled={isEdit}
                 placeholder="usuario@empresa.com"
-                className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
+                className="w-full pl-8 pr-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-zinc-950 disabled:text-zinc-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
+            <label className="block text-xs font-medium text-zinc-300 mb-1">
               Senha {isEdit ? '(deixe em branco para não alterar)' : '*'}
             </label>
             <div className="relative">
-              <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
               <input
                 value={form.password}
                 onChange={e => set('password', e.target.value)}
                 type="password"
                 required={!isEdit}
                 placeholder={isEdit ? 'Nova senha (opcional)' : 'Senha de acesso'}
-                className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full pl-8 pr-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-2">Cargo</label>
+            <label className="block text-xs font-medium text-zinc-300 mb-2">Cargo</label>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => set('role', 'member')}
                 className={`flex-1 py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 border transition ${
                   form.role === 'member'
-                    ? 'bg-blue-50 border-blue-300 text-blue-700'
-                    : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                    ? 'bg-blue-500/10 border-blue-300 text-blue-400'
+                    : 'border-zinc-700 text-zinc-400 hover:bg-zinc-950'
                 }`}
               >
                 <User size={14} />
@@ -206,8 +206,8 @@ function UserModal({
                 onClick={() => set('role', 'admin')}
                 className={`flex-1 py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 border transition ${
                   form.role === 'admin'
-                    ? 'bg-violet-50 border-violet-300 text-violet-700'
-                    : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                    ? 'bg-violet-500/10 border-violet-300 text-violet-400'
+                    : 'border-zinc-700 text-zinc-400 hover:bg-zinc-950'
                 }`}
               >
                 <ShieldCheck size={14} />
@@ -218,55 +218,55 @@ function UserModal({
 
           {form.role === 'member' && (
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-2">Permissões</label>
+              <label className="block text-xs font-medium text-zinc-300 mb-2">Permissões</label>
               <div className="grid grid-cols-2 gap-2">
                 {PERMISSION_LIST.map(perm => (
                   <label
                     key={perm.key}
                     className={`flex items-center gap-2.5 p-3 border rounded-lg cursor-pointer transition ${
                       form.permissions.includes(perm.key)
-                        ? 'bg-indigo-50 border-indigo-300'
-                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                        ? 'bg-emerald-900/20 border-emerald-600'
+                        : 'border-zinc-700 hover:border-slate-300 hover:bg-zinc-950'
                     }`}
                   >
                     <input
                       type="checkbox"
                       checked={form.permissions.includes(perm.key)}
                       onChange={() => togglePermission(perm.key)}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      className="rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
                     />
-                    <span className={`text-sm font-medium ${form.permissions.includes(perm.key) ? 'text-indigo-700' : 'text-slate-600'}`}>
+                    <span className={`text-sm font-medium ${form.permissions.includes(perm.key) ? 'text-emerald-400' : 'text-zinc-300'}`}>
                       {perm.label}
                     </span>
                   </label>
                 ))}
               </div>
-              <p className="text-xs text-slate-400 mt-2">
+              <p className="text-xs text-zinc-500 mt-2">
                 Admins têm acesso a todos os módulos automaticamente.
               </p>
             </div>
           )}
 
           {form.role === 'admin' && (
-            <div className="flex items-center gap-2 p-3 bg-violet-50 border border-violet-200 rounded-lg">
+            <div className="flex items-center gap-2 p-3 bg-violet-500/10 border border-violet-500/20 rounded-lg">
               <ShieldCheck size={16} className="text-violet-600 flex-shrink-0" />
-              <p className="text-sm text-violet-700">Admins têm acesso completo a todos os módulos.</p>
+              <p className="text-sm text-violet-400">Admins têm acesso completo a todos os módulos.</p>
             </div>
           )}
         </form>
 
-        <div className="p-5 border-t border-slate-100 flex gap-3">
+        <div className="p-5 border-t border-zinc-800 flex gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 px-4 py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 transition"
+            className="flex-1 px-4 py-2 border border-zinc-700 text-zinc-300 text-sm font-medium rounded-lg hover:bg-zinc-950 transition"
           >
             Cancelar
           </button>
           <button
             onClick={handleSubmit as React.MouseEventHandler}
             disabled={loading}
-            className="flex-1 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition disabled:opacity-70 flex items-center justify-center gap-2"
+            className="flex-1 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition disabled:opacity-70 flex items-center justify-center gap-2"
           >
             {loading && <Loader2 size={14} className="animate-spin" />}
             {isEdit ? 'Salvar' : 'Criar Usuário'}
@@ -324,18 +324,18 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="min-h-full bg-zinc-950 p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Usuários</h1>
-          <p className="text-slate-500 text-sm mt-0.5">
+          <h1 className="text-2xl font-bold text-zinc-50">Usuários</h1>
+          <p className="text-zinc-400 text-sm mt-0.5">
             {users.length} usuário{users.length !== 1 ? 's' : ''} cadastrado{users.length !== 1 ? 's' : ''}
           </p>
         </div>
         <button
           onClick={() => setShowAdd(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition shadow-sm"
         >
           <Plus size={16} />
           Novo Usuário
@@ -344,30 +344,30 @@ export default function UsersPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 size={32} className="animate-spin text-indigo-600" />
+          <Loader2 size={32} className="animate-spin text-emerald-500" />
         </div>
       ) : users.length === 0 ? (
         <div className="text-center py-20">
-          <Users size={40} className="mx-auto text-slate-300 mb-3" />
-          <p className="text-slate-500 font-medium">Nenhum usuário encontrado</p>
+          <Users size={40} className="mx-auto text-zinc-600 mb-3" />
+          <p className="text-zinc-400 font-medium">Nenhum usuário encontrado</p>
           <button
             onClick={() => setShowAdd(true)}
-            className="mt-4 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition"
+            className="mt-4 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition"
           >
             Criar primeiro usuário
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-zinc-900 rounded-xl border border-zinc-800 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="text-left px-4 py-3 font-medium text-slate-500 text-xs">Nome</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-500 text-xs">E-mail</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-500 text-xs">Cargo</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-500 text-xs">Permissões</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-500 text-xs">Ações</th>
+                <tr className="border-b border-zinc-800 bg-zinc-950">
+                  <th className="text-left px-4 py-3 font-medium text-zinc-400 text-xs">Nome</th>
+                  <th className="text-left px-4 py-3 font-medium text-zinc-400 text-xs">E-mail</th>
+                  <th className="text-left px-4 py-3 font-medium text-zinc-400 text-xs">Cargo</th>
+                  <th className="text-left px-4 py-3 font-medium text-zinc-400 text-xs">Permissões</th>
+                  <th className="text-right px-4 py-3 font-medium text-zinc-400 text-xs">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -379,17 +379,17 @@ export default function UsersPage() {
                   return (
                     <tr
                       key={u.id}
-                      className={`border-b border-slate-50 hover:bg-slate-50/50 transition ${isCurrentUser ? 'bg-indigo-50/30' : ''}`}
+                      className={`border-b border-slate-50 hover:bg-zinc-950/50 transition ${isCurrentUser ? 'bg-emerald-900/20/30' : ''}`}
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                            role === 'admin' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'
+                            role === 'admin' ? 'bg-violet-500/10 text-violet-400' : 'bg-blue-500/20 text-blue-400'
                           }`}>
                             {getUserInitials(u)}
                           </div>
                           <div>
-                            <p className="font-medium text-slate-800">
+                            <p className="font-medium text-zinc-50">
                               {getUserName(u)}
                               {isCurrentUser && (
                                 <span className="ml-1.5 text-xs text-indigo-500 font-normal">(você)</span>
@@ -398,13 +398,13 @@ export default function UsersPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-slate-600 text-sm">{u.email}</td>
+                      <td className="px-4 py-3 text-zinc-300 text-sm">{u.email}</td>
                       <td className="px-4 py-3">
                         <RoleBadge role={role} />
                       </td>
                       <td className="px-4 py-3">
                         {role === 'admin' ? (
-                          <span className="text-xs text-slate-400 italic">Acesso total</span>
+                          <span className="text-xs text-zinc-500 italic">Acesso total</span>
                         ) : permissions.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {permissions.map(perm => {
@@ -412,7 +412,7 @@ export default function UsersPage() {
                               return (
                                 <span
                                   key={perm}
-                                  className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full"
+                                  className="text-xs px-2 py-0.5 bg-zinc-800 text-zinc-300 rounded-full"
                                 >
                                   {permLabel}
                                 </span>
@@ -420,14 +420,14 @@ export default function UsersPage() {
                             })}
                           </div>
                         ) : (
-                          <span className="text-xs text-slate-400">Sem permissões</span>
+                          <span className="text-xs text-zinc-500">Sem permissões</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => setEditUser(u)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition"
+                            className="p-1.5 rounded-lg text-zinc-500 hover:text-emerald-500 hover:bg-emerald-900/20 transition"
                             title="Editar usuário"
                           >
                             <Edit2 size={15} />
@@ -439,14 +439,14 @@ export default function UsersPage() {
                                 <button
                                   onClick={() => handleDelete(u.id)}
                                   disabled={deletingId === u.id}
-                                  className="px-2 py-1 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 transition disabled:opacity-70 flex items-center gap-1"
+                                  className="px-2 py-1 bg-rose-500/100 text-white text-xs font-medium rounded-lg hover:bg-rose-600 transition disabled:opacity-70 flex items-center gap-1"
                                 >
                                   {deletingId === u.id ? <Loader2 size={10} className="animate-spin" /> : null}
                                   Confirmar
                                 </button>
                                 <button
                                   onClick={() => setConfirmDeleteId(null)}
-                                  className="px-2 py-1 border border-slate-200 text-slate-600 text-xs rounded-lg hover:bg-slate-50 transition"
+                                  className="px-2 py-1 border border-zinc-700 text-zinc-300 text-xs rounded-lg hover:bg-zinc-950 transition"
                                 >
                                   Cancelar
                                 </button>
@@ -454,7 +454,7 @@ export default function UsersPage() {
                             ) : (
                               <button
                                 onClick={() => setConfirmDeleteId(u.id)}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition"
+                                className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
                                 title="Remover usuário"
                               >
                                 <Trash2 size={15} />

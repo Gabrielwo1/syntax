@@ -75,17 +75,17 @@ function UploadModal({ onClose, onUploaded }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between p-5 border-b border-slate-100">
-          <h2 className="font-semibold text-slate-800">Enviar Imagem</h2>
-          <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"><X size={18} /></button>
+      <div className="bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between p-5 border-b border-zinc-800">
+          <h2 className="font-semibold text-zinc-50">Enviar Imagem</h2>
+          <button onClick={onClose} className="p-1 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div
             onDragOver={e => e.preventDefault()}
             onDrop={handleDrop}
             onClick={() => !file && inputRef.current?.click()}
-            className={`border-2 border-dashed rounded-xl overflow-hidden transition ${preview ? 'border-indigo-300 cursor-default' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50 cursor-pointer'}`}
+            className={`border-2 border-dashed rounded-xl overflow-hidden transition ${preview ? 'border-emerald-600 cursor-default' : 'border-zinc-700 hover:border-emerald-600 hover:bg-zinc-950 cursor-pointer'}`}
           >
             <input ref={inputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
             {preview ? (
@@ -101,29 +101,29 @@ function UploadModal({ onClose, onUploaded }: {
               </div>
             ) : (
               <div className="p-8 text-center">
-                <Upload size={28} className="mx-auto text-slate-400 mb-2" />
-                <p className="text-sm font-medium text-slate-600">Clique ou arraste uma imagem</p>
-                <p className="text-xs text-slate-400 mt-1">PNG, JPG, GIF, WebP</p>
+                <Upload size={28} className="mx-auto text-zinc-500 mb-2" />
+                <p className="text-sm font-medium text-zinc-300">Clique ou arraste uma imagem</p>
+                <p className="text-xs text-zinc-500 mt-1">PNG, JPG, GIF, WebP</p>
               </div>
             )}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Título</label>
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Título da imagem (opcional)" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <label className="block text-xs font-medium text-zinc-300 mb-1">Título</label>
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Título da imagem (opcional)" className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Tags</label>
+            <label className="block text-xs font-medium text-zinc-300 mb-1">Tags</label>
             <div className="relative">
-              <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="instagram, feed, stories (separadas por vírgula)" className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="instagram, feed, stories (separadas por vírgula)" className="w-full pl-8 pr-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
             </div>
           </div>
 
           <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 transition">Cancelar</button>
-            <button type="submit" disabled={loading || !file} className="flex-1 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition disabled:opacity-70 flex items-center justify-center gap-2">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-zinc-700 text-zinc-300 text-sm font-medium rounded-lg hover:bg-zinc-950 transition">Cancelar</button>
+            <button type="submit" disabled={loading || !file} className="flex-1 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition disabled:opacity-70 flex items-center justify-center gap-2">
               {loading ? <><Loader2 size={14} className="animate-spin" />Enviando...</> : <><Upload size={14} />Enviar</>}
             </button>
           </div>
@@ -166,49 +166,49 @@ function ImageViewModal({ item, onClose, onDeleted }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-4 border-b border-slate-100">
+      <div className="bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b border-zinc-800">
           <div className="min-w-0">
-            <p className="font-semibold text-slate-800 truncate">{item.title || 'Imagem'}</p>
+            <p className="font-semibold text-zinc-50 truncate">{item.title || 'Imagem'}</p>
             {item.tags && item.tags.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1">
                 {item.tags.map(tag => (
-                  <span key={tag} className="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full">{tag}</span>
+                  <span key={tag} className="text-xs px-2 py-0.5 bg-emerald-900/20 text-emerald-500 rounded-full">{tag}</span>
                 ))}
               </div>
             )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {url && (
-              <a href={url} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition">
+              <a href={url} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg text-zinc-500 hover:text-emerald-500 hover:bg-emerald-900/20 transition">
                 <ExternalLink size={16} />
               </a>
             )}
             {confirmDelete ? (
               <div className="flex items-center gap-1">
-                <button onClick={handleDelete} disabled={deleting} className="px-2 py-1 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 transition disabled:opacity-70">
+                <button onClick={handleDelete} disabled={deleting} className="px-2 py-1 bg-rose-500/100 text-white text-xs font-medium rounded-lg hover:bg-rose-600 transition disabled:opacity-70">
                   {deleting ? <Loader2 size={12} className="animate-spin" /> : 'Excluir'}
                 </button>
-                <button onClick={() => setConfirmDelete(false)} className="px-2 py-1 border border-slate-200 text-slate-600 text-xs rounded-lg">Cancelar</button>
+                <button onClick={() => setConfirmDelete(false)} className="px-2 py-1 border border-zinc-700 text-zinc-300 text-xs rounded-lg">Cancelar</button>
               </div>
             ) : (
-              <button onClick={() => setConfirmDelete(true)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition">
+              <button onClick={() => setConfirmDelete(true)} className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition">
                 <Trash2 size={16} />
               </button>
             )}
-            <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"><X size={18} /></button>
+            <button onClick={onClose} className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"><X size={18} /></button>
           </div>
         </div>
         <div className="bg-slate-900 flex items-center justify-center min-h-64">
           {loading ? (
-            <Loader2 size={28} className="animate-spin text-slate-400" />
+            <Loader2 size={28} className="animate-spin text-zinc-500" />
           ) : url ? (
             <img src={url} alt={item.title || 'Imagem'} className="max-w-full max-h-96 object-contain" />
           ) : (
-            <div className="text-slate-500 text-sm">Erro ao carregar imagem</div>
+            <div className="text-zinc-400 text-sm">Erro ao carregar imagem</div>
           )}
         </div>
-        <div className="p-4 text-xs text-slate-400 flex items-center gap-3">
+        <div className="p-4 text-xs text-zinc-500 flex items-center gap-3">
           <span>Enviado em {formatDate(item.createdAt)}</span>
         </div>
       </div>
@@ -231,9 +231,9 @@ function ImageCard({ item, onClick }: { item: RepoItem; onClick: () => void }) {
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all duration-150 overflow-hidden cursor-pointer group"
+      className="bg-zinc-900 rounded-xl border border-zinc-800 shadow-sm hover:shadow-md hover:border-emerald-700 transition-all duration-150 overflow-hidden cursor-pointer group"
     >
-      <div className="relative h-40 bg-slate-100 overflow-hidden">
+      <div className="relative h-40 bg-zinc-800 overflow-hidden">
         {url && !imgError ? (
           <>
             <img
@@ -245,17 +245,17 @@ function ImageCard({ item, onClick }: { item: RepoItem; onClick: () => void }) {
             />
             {!loaded && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <Loader2 size={20} className="animate-spin text-slate-400" />
+                <Loader2 size={20} className="animate-spin text-zinc-500" />
               </div>
             )}
           </>
         ) : imgError ? (
           <div className="w-full h-full flex items-center justify-center">
-            <ImageOff size={24} className="text-slate-400" />
+            <ImageOff size={24} className="text-zinc-500" />
           </div>
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Loader2 size={20} className="animate-spin text-slate-400" />
+            <Loader2 size={20} className="animate-spin text-zinc-500" />
           </div>
         )}
         {/* Hover overlay */}
@@ -264,16 +264,16 @@ function ImageCard({ item, onClick }: { item: RepoItem; onClick: () => void }) {
         </div>
       </div>
       <div className="p-3">
-        {item.title && <p className="text-sm font-medium text-slate-700 truncate mb-1">{item.title}</p>}
+        {item.title && <p className="text-sm font-medium text-zinc-100 truncate mb-1">{item.title}</p>}
         {item.tags && item.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-1">
             {item.tags.slice(0, 3).map(tag => (
-              <span key={tag} className="text-xs px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-full">{tag}</span>
+              <span key={tag} className="text-xs px-1.5 py-0.5 bg-emerald-900/20 text-emerald-500 rounded-full">{tag}</span>
             ))}
-            {item.tags.length > 3 && <span className="text-xs text-slate-400">+{item.tags.length - 3}</span>}
+            {item.tags.length > 3 && <span className="text-xs text-zinc-500">+{item.tags.length - 3}</span>}
           </div>
         )}
-        <p className="text-xs text-slate-400">{formatDate(item.createdAt)}</p>
+        <p className="text-xs text-zinc-500">{formatDate(item.createdAt)}</p>
       </div>
     </div>
   )
@@ -307,16 +307,16 @@ export default function Repository() {
   })
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="min-h-full bg-zinc-950 p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Repositório</h1>
-          <p className="text-slate-500 text-sm mt-0.5">{items.length} imagem{items.length !== 1 ? 'ns' : ''}</p>
+          <h1 className="text-2xl font-bold text-zinc-50">Repositório</h1>
+          <p className="text-zinc-400 text-sm mt-0.5">{items.length} imagem{items.length !== 1 ? 'ns' : ''}</p>
         </div>
         <button
           onClick={() => setShowUpload(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition shadow-sm"
         >
           <Plus size={16} />
           Enviar Imagem
@@ -326,12 +326,12 @@ export default function Repository() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-5">
         <div className="relative flex-1 min-w-48">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar imagens..."
-            className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full pl-9 pr-4 py-2.5 border border-zinc-700 rounded-xl text-sm bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </div>
 
@@ -339,7 +339,7 @@ export default function Repository() {
           <div className="flex flex-wrap gap-1.5">
             <button
               onClick={() => setTagFilter('')}
-              className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition ${!tagFilter ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-300'}`}
+              className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition ${!tagFilter ? 'bg-emerald-600 text-white' : 'bg-zinc-900 border border-zinc-700 text-zinc-300 hover:border-emerald-600'}`}
             >
               Todos
             </button>
@@ -347,7 +347,7 @@ export default function Repository() {
               <button
                 key={tag}
                 onClick={() => setTagFilter(tagFilter === tag ? '' : tag)}
-                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition ${tagFilter === tag ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-300'}`}
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition ${tagFilter === tag ? 'bg-emerald-600 text-white' : 'bg-zinc-900 border border-zinc-700 text-zinc-300 hover:border-emerald-600'}`}
               >
                 <Tag size={10} />{tag}
               </button>
@@ -358,17 +358,17 @@ export default function Repository() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 size={32} className="animate-spin text-indigo-600" />
+          <Loader2 size={32} className="animate-spin text-emerald-500" />
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-20">
-          <Image size={40} className="mx-auto text-slate-300 mb-3" />
-          <p className="text-slate-500 font-medium">Nenhuma imagem encontrada</p>
-          <p className="text-slate-400 text-sm mt-1">
+          <Image size={40} className="mx-auto text-zinc-600 mb-3" />
+          <p className="text-zinc-400 font-medium">Nenhuma imagem encontrada</p>
+          <p className="text-zinc-500 text-sm mt-1">
             {search || tagFilter ? 'Tente outros filtros' : 'Envie sua primeira imagem ao repositório'}
           </p>
           {!search && !tagFilter && (
-            <button onClick={() => setShowUpload(true)} className="mt-4 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition">
+            <button onClick={() => setShowUpload(true)} className="mt-4 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition">
               Enviar Imagem
             </button>
           )}

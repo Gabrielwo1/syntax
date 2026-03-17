@@ -39,16 +39,16 @@ interface StatCardProps {
 
 function StatCard({ title, value, icon, color, trend, subtitle }: StatCardProps) {
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100 flex items-start gap-4">
+    <div className="bg-zinc-900 rounded-xl p-5 border border-zinc-800 shadow-xl shadow-black/10 flex items-start gap-4">
       <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
         {icon}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-slate-500 text-sm font-medium">{title}</p>
-        <p className="text-2xl font-bold text-slate-800 mt-0.5">{value}</p>
-        {subtitle && <p className="text-slate-400 text-xs mt-0.5">{subtitle}</p>}
+        <p className="text-zinc-400 text-sm font-medium">{title}</p>
+        <p className="text-2xl font-bold text-zinc-50 mt-0.5">{value}</p>
+        {subtitle && <p className="text-zinc-500 text-xs mt-0.5">{subtitle}</p>}
         {trend && (
-          <div className={`flex items-center gap-1 mt-1 text-xs font-medium ${trend.positive ? 'text-emerald-600' : 'text-red-500'}`}>
+          <div className={`flex items-center gap-1 mt-1 text-xs font-medium ${trend.positive ? 'text-emerald-600' : 'text-rose-400'}`}>
             {trend.positive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
             <span>{trend.value}% este mês</span>
           </div>
@@ -59,10 +59,10 @@ function StatCard({ title, value, icon, color, trend, subtitle }: StatCardProps)
 }
 
 const MODULES = [
-  { to: '/analytics', label: 'Analytics', desc: 'Sites e métricas de acesso', icon: <BarChart2 size={20} />, color: 'bg-blue-50 text-blue-600' },
-  { to: '/crm', label: 'CRM', desc: 'Gestão de leads e clientes', icon: <Users2 size={20} />, color: 'bg-violet-50 text-violet-600' },
-  { to: '/financeiro', label: 'Financeiro', desc: 'Contas a pagar e receber', icon: <DollarSign size={20} />, color: 'bg-emerald-50 text-emerald-600' },
-  { to: '/tarefas', label: 'Tarefas', desc: 'Gestão de tarefas e projetos', icon: <CheckSquare size={20} />, color: 'bg-amber-50 text-amber-600' },
+  { to: '/analytics', label: 'Analytics', desc: 'Sites e métricas de acesso', icon: <BarChart2 size={20} />, color: 'bg-blue-500/10 text-blue-600' },
+  { to: '/crm', label: 'CRM', desc: 'Gestão de leads e clientes', icon: <Users2 size={20} />, color: 'bg-violet-500/10 text-violet-600' },
+  { to: '/financeiro', label: 'Financeiro', desc: 'Contas a pagar e receber', icon: <DollarSign size={20} />, color: 'bg-emerald-500/10 text-emerald-600' },
+  { to: '/tarefas', label: 'Tarefas', desc: 'Gestão de tarefas e projetos', icon: <CheckSquare size={20} />, color: 'bg-amber-500/10 text-amber-400' },
   { to: '/pdfs', label: 'PDFs', desc: 'Repositório de documentos', icon: <FileText size={20} />, color: 'bg-rose-50 text-rose-600' },
   { to: '/repositorio', label: 'Repositório', desc: 'Imagens e mídias sociais', icon: <Image size={20} />, color: 'bg-cyan-50 text-cyan-600' },
 ]
@@ -140,17 +140,17 @@ export default function Dashboard() {
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-7">
-        <h1 className="text-2xl font-bold text-slate-800">
+        <h1 className="text-2xl font-bold text-zinc-50">
           Olá, {userName.split(' ')[0]} 👋
         </h1>
-        <p className="text-slate-500 text-sm mt-1">
+        <p className="text-zinc-400 text-sm mt-1">
           {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
         </p>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 size={32} className="animate-spin text-indigo-600" />
+          <Loader2 size={32} className="animate-spin text-emerald-500" />
         </div>
       ) : (
         <>
@@ -161,7 +161,7 @@ export default function Dashboard() {
                 title="Total de Leads"
                 value={leads.length}
                 icon={<Users2 size={20} className="text-violet-600" />}
-                color="bg-violet-50"
+                color="bg-violet-500/10"
                 subtitle={`${leads.filter(l => l.stage === 'novo').length} novos`}
               />
             )}
@@ -170,7 +170,7 @@ export default function Dashboard() {
                 title="A Receber"
                 value={formatCurrency(totalReceivable)}
                 icon={<DollarSign size={20} className="text-emerald-600" />}
-                color="bg-emerald-50"
+                color="bg-emerald-500/10"
                 subtitle="Entradas pendentes"
               />
             )}
@@ -178,8 +178,8 @@ export default function Dashboard() {
               <StatCard
                 title="Tarefas Ativas"
                 value={pendingTasks}
-                icon={<CheckSquare size={20} className="text-amber-600" />}
-                color="bg-amber-50"
+                icon={<CheckSquare size={20} className="text-amber-400" />}
+                color="bg-amber-500/10"
                 subtitle={`${activeTasks} em progresso`}
               />
             )}
@@ -188,7 +188,7 @@ export default function Dashboard() {
                 title="Sites Monitorados"
                 value={sites.length}
                 icon={<Globe size={20} className="text-blue-600" />}
-                color="bg-blue-50"
+                color="bg-blue-500/10"
                 subtitle="Sites ativos"
               />
             )}
@@ -197,11 +197,11 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-7">
             {/* Revenue chart */}
             {canAccess('financeiro') && chartData.length > 0 && (
-              <div className="xl:col-span-2 bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+              <div className="xl:col-span-2 bg-zinc-900 rounded-xl p-5 border border-zinc-800 shadow-xl shadow-black/10">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="font-semibold text-slate-800">Receita Recebida</h3>
-                    <p className="text-slate-400 text-xs mt-0.5">Por mês de vencimento</p>
+                    <h3 className="font-semibold text-zinc-50">Receita Recebida</h3>
+                    <p className="text-zinc-500 text-xs mt-0.5">Por mês de vencimento</p>
                   </div>
                 </div>
                 <ResponsiveContainer width="100%" height={200}>
@@ -227,27 +227,27 @@ export default function Dashboard() {
 
             {/* Recent leads */}
             {canAccess('crm') && recentLeads.length > 0 && (
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+              <div className="bg-zinc-900 rounded-xl p-5 border border-zinc-800 shadow-xl shadow-black/10">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-slate-800">Leads Recentes</h3>
-                  <button onClick={() => navigate('/crm')} className="text-indigo-600 text-xs font-medium flex items-center gap-1 hover:text-indigo-700">
+                  <h3 className="font-semibold text-zinc-50">Leads Recentes</h3>
+                  <button onClick={() => navigate('/crm')} className="text-emerald-500 text-xs font-medium flex items-center gap-1 hover:text-emerald-400">
                     Ver todos <ArrowRight size={12} />
                   </button>
                 </div>
                 <div className="space-y-3">
                   {recentLeads.map(lead => (
                     <div key={lead.id} className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center text-violet-600 text-xs font-bold flex-shrink-0">
+                      <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center text-violet-600 text-xs font-bold flex-shrink-0">
                         {lead.name.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-700 truncate">{lead.name}</p>
-                        <p className="text-xs text-slate-400 truncate">{lead.company || lead.email}</p>
+                        <p className="text-sm font-medium text-zinc-100 truncate">{lead.name}</p>
+                        <p className="text-xs text-zinc-500 truncate">{lead.company || lead.email}</p>
                       </div>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
-                        lead.stage === 'fechado' ? 'bg-emerald-100 text-emerald-700' :
-                        lead.stage === 'perdido' ? 'bg-red-100 text-red-700' :
-                        'bg-slate-100 text-slate-600'
+                        lead.stage === 'fechado' ? 'bg-emerald-500/20 text-emerald-400' :
+                        lead.stage === 'perdido' ? 'bg-rose-500/20 text-rose-400' :
+                        'bg-zinc-800 text-zinc-300'
                       }`}>
                         {lead.stage}
                       </span>
@@ -262,24 +262,24 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             {/* Recent tasks */}
             {canAccess('tarefas') && recentTasks.length > 0 && (
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+              <div className="bg-zinc-900 rounded-xl p-5 border border-zinc-800 shadow-xl shadow-black/10">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-slate-800">Tarefas Recentes</h3>
-                  <button onClick={() => navigate('/tarefas')} className="text-indigo-600 text-xs font-medium flex items-center gap-1 hover:text-indigo-700">
+                  <h3 className="font-semibold text-zinc-50">Tarefas Recentes</h3>
+                  <button onClick={() => navigate('/tarefas')} className="text-emerald-500 text-xs font-medium flex items-center gap-1 hover:text-emerald-400">
                     Ver todas <ArrowRight size={12} />
                   </button>
                 </div>
                 <div className="space-y-2.5">
                   {recentTasks.map(task => (
-                    <div key={task.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50">
+                    <div key={task.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-zinc-950">
                       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                        task.status === 'completed' ? 'bg-emerald-500' :
-                        task.status === 'in_progress' ? 'bg-amber-500' :
+                        task.status === 'completed' ? 'bg-emerald-500/100' :
+                        task.status === 'in_progress' ? 'bg-amber-500/100' :
                         'bg-slate-300'
                       }`} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-700 truncate">{task.name}</p>
-                        {task.project && <p className="text-xs text-slate-400">{task.project}</p>}
+                        <p className="text-sm text-zinc-100 truncate">{task.name}</p>
+                        {task.project && <p className="text-xs text-zinc-500">{task.project}</p>}
                       </div>
                     </div>
                   ))}
@@ -288,21 +288,21 @@ export default function Dashboard() {
             )}
 
             {/* Module shortcuts */}
-            <div className={`${canAccess('tarefas') && recentTasks.length > 0 ? 'xl:col-span-2' : 'xl:col-span-3'} bg-white rounded-xl p-5 shadow-sm border border-slate-100`}>
-              <h3 className="font-semibold text-slate-800 mb-4">Módulos</h3>
+            <div className={`${canAccess('tarefas') && recentTasks.length > 0 ? 'xl:col-span-2' : 'xl:col-span-3'} bg-zinc-900 rounded-xl p-5 border border-zinc-800 shadow-xl shadow-black/10`}>
+              <h3 className="font-semibold text-zinc-50 mb-4">Módulos</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {visibleModules.map(mod => (
                   <button
                     key={mod.to}
                     onClick={() => navigate(mod.to)}
-                    className="flex flex-col items-start gap-3 p-4 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/50 transition-all duration-150 text-left group"
+                    className="flex flex-col items-start gap-3 p-4 rounded-xl border border-zinc-800 hover:border-emerald-700 hover:bg-emerald-900/20/50 transition-all duration-150 text-left group"
                   >
                     <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${mod.color}`}>
                       {mod.icon}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-slate-700 group-hover:text-indigo-700">{mod.label}</p>
-                      <p className="text-xs text-slate-400 mt-0.5 leading-tight">{mod.desc}</p>
+                      <p className="text-sm font-semibold text-zinc-100 group-hover:text-emerald-400">{mod.label}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5 leading-tight">{mod.desc}</p>
                     </div>
                   </button>
                 ))}

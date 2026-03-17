@@ -1,9 +1,32 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Zap, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '../contexts/AuthContext'
 import { authApi } from '../lib/api'
+
+// Syntax S logo
+function SyntaxLogo() {
+  return (
+    <svg width="52" height="52" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="lgl1" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#14532d" />
+          <stop offset="50%" stopColor="#16a34a" />
+          <stop offset="100%" stopColor="#22c55e" />
+        </linearGradient>
+        <linearGradient id="lgl2" x1="36" y1="0" x2="0" y2="36" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#166534" />
+          <stop offset="100%" stopColor="#15803d" />
+        </linearGradient>
+      </defs>
+      <rect width="36" height="36" rx="9" fill="#0a0a0a" />
+      <polygon points="5,5 22,5 31,11 22,17 10,17 10,11" fill="url(#lgl1)" opacity="0.95" />
+      <polygon points="14,19 26,19 31,25 26,31 5,31 14,25" fill="url(#lgl2)" opacity="1" />
+      <polygon points="10,17 22,17 26,19 14,19" fill="#16a34a" opacity="0.8" />
+    </svg>
+  )
+}
 
 export default function Login() {
   const { login, initialized, refreshUser } = useAuth()
@@ -22,11 +45,7 @@ export default function Login() {
     setLoading(true)
     try {
       if (isSetup) {
-        if (!name.trim()) {
-          toast.error('Informe seu nome')
-          setLoading(false)
-          return
-        }
+        if (!name.trim()) { toast.error('Informe seu nome'); setLoading(false); return }
         await authApi.init(email, password, name)
         toast.success('Sistema configurado! Faça login.')
         await login(email, password)
@@ -48,32 +67,33 @@ export default function Login() {
     }
   }
 
+  const inputCls = "w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-50 placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/40 transition-all"
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 flex items-center justify-center p-4">
-      {/* Background decoration */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-indigo-600/20 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-violet-600/20 rounded-full blur-3xl" />
+    <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+      {/* Subtle background glows */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-60 -right-60 w-96 h-96 bg-emerald-600/5 rounded-full blur-3xl" />
+        <div className="absolute -bottom-60 -left-60 w-96 h-96 bg-emerald-800/5 rounded-full blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-sm">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-4 shadow-lg shadow-indigo-900/50"
-            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-            <Zap size={24} className="text-white" />
+        <div className="flex flex-col items-center mb-8">
+          <div className="mb-5 p-3 bg-zinc-900 rounded-2xl border border-zinc-800 shadow-2xl shadow-black/40">
+            <SyntaxLogo />
           </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Syntax</h1>
-          <p className="text-slate-400 text-sm mt-1">Plataforma de Gestão</p>
+          <h1 className="text-3xl font-black text-zinc-50 tracking-widest uppercase">SYNTAX</h1>
+          <p className="text-zinc-500 text-sm mt-1 font-medium">Plataforma de Gestão</p>
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
+        <div className="bg-zinc-900 rounded-2xl border border-zinc-800 shadow-2xl shadow-black/40 p-8">
           <div className="mb-6">
-            <h2 className="text-xl font-bold text-slate-800">
+            <h2 className="text-xl font-bold text-zinc-50">
               {isSetup ? 'Configuração Inicial' : 'Bem-vindo de volta'}
             </h2>
-            <p className="text-slate-500 text-sm mt-1">
+            <p className="text-zinc-500 text-sm mt-1">
               {isSetup
                 ? 'Crie a conta de administrador para começar'
                 : 'Entre com suas credenciais para continuar'}
@@ -81,8 +101,8 @@ export default function Login() {
           </div>
 
           {isSetup && (
-            <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
-              <p className="text-indigo-700 text-xs font-medium">
+            <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+              <p className="text-emerald-400 text-xs font-medium">
                 Nenhum usuário cadastrado. Configure o primeiro administrador.
               </p>
             </div>
@@ -91,24 +111,20 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSetup && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Nome completo
-                </label>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Nome completo</label>
                 <input
                   type="text"
                   value={name}
                   onChange={e => setName(e.target.value)}
                   placeholder="Seu nome"
                   required
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                  className={inputCls}
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                E-mail
-              </label>
+              <label className="block text-xs font-medium text-zinc-400 mb-1.5">E-mail</label>
               <input
                 type="email"
                 value={email}
@@ -116,14 +132,12 @@ export default function Login() {
                 placeholder="seu@email.com"
                 required
                 autoComplete="email"
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                className={inputCls}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Senha
-              </label>
+              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Senha</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -132,12 +146,12 @@ export default function Login() {
                   placeholder="••••••••"
                   required
                   autoComplete="current-password"
-                  className="w-full px-3.5 py-2.5 pr-10 border border-slate-200 rounded-lg text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                  className={`${inputCls} pr-11`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -147,14 +161,10 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 px-4 rounded-lg text-sm font-semibold text-white transition-all duration-150 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-              style={{ background: loading ? '#818cf8' : 'linear-gradient(135deg, #6366f1, #4f46e5)' }}
+              className="w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 mt-2"
             >
               {loading ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  {isSetup ? 'Configurando...' : 'Entrando...'}
-                </>
+                <><Loader2 size={16} className="animate-spin" />{isSetup ? 'Configurando...' : 'Entrando...'}</>
               ) : (
                 isSetup ? 'Criar Conta Admin' : 'Entrar'
               )}
@@ -162,7 +172,7 @@ export default function Login() {
           </form>
         </div>
 
-        <p className="text-center text-slate-500 text-xs mt-6">
+        <p className="text-center text-zinc-600 text-xs mt-6">
           © {new Date().getFullYear()} Syntax. Todos os direitos reservados.
         </p>
       </div>
