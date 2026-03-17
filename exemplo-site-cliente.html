@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Site de Exemplo - Cliente da Syntax</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      line-height: 1.6;
+      color: #333;
+    }
+    
+    header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 3rem 1rem;
+      text-align: center;
+    }
+    
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1rem;
+    }
+    
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      margin-top: 2rem;
+    }
+    
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 2rem;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      transition: transform 0.2s;
+    }
+    
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+    }
+    
+    .card h3 {
+      color: #667eea;
+      margin-bottom: 1rem;
+    }
+    
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 1rem;
+      margin-top: 1rem;
+      transition: background 0.2s;
+    }
+    
+    button:hover {
+      background: #764ba2;
+    }
+    
+    a {
+      color: #667eea;
+      text-decoration: none;
+    }
+    
+    a:hover {
+      text-decoration: underline;
+    }
+    
+    footer {
+      background: #333;
+      color: white;
+      text-align: center;
+      padding: 2rem;
+      margin-top: 3rem;
+    }
+    
+    .analytics-demo {
+      background: #f0f4ff;
+      border: 2px dashed #667eea;
+      border-radius: 8px;
+      padding: 2rem;
+      margin: 2rem 0;
+    }
+    
+    .analytics-demo h3 {
+      color: #667eea;
+      margin-bottom: 1rem;
+    }
+    
+    .analytics-demo code {
+      background: #333;
+      color: #0f0;
+      padding: 0.25rem 0.5rem;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🚀 Site de Exemplo</h1>
+    <p>Este é um site de demonstração para testar o Syntax Analytics</p>
+  </header>
+
+  <div class="container">
+    <div class="analytics-demo">
+      <h3>📊 Tracking Analytics Ativo!</h3>
+      <p>Este site está rastreando suas interações. Abra o Console (F12) e você verá:</p>
+      <p style="margin-top: 1rem;"><code>Syntax Analytics initialized</code></p>
+      <p style="margin-top: 1rem;">
+        <strong>O que está sendo rastreado:</strong><br>
+        ✓ Visualização desta página<br>
+        ✓ Tempo de permanência<br>
+        ✓ Tipo de dispositivo (desktop/mobile)<br>
+        ✓ Cliques em links externos<br>
+      </p>
+    </div>
+
+    <h2>Nossos Serviços</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Design Web</h3>
+        <p>Criamos interfaces modernas e responsivas para seu negócio.</p>
+        <button onclick="trackCustomEvent('interesse_design')">Tenho Interesse</button>
+      </div>
+
+      <div class="card">
+        <h3>Desenvolvimento</h3>
+        <p>Desenvolvemos aplicações web completas e performáticas.</p>
+        <button onclick="trackCustomEvent('interesse_desenvolvimento')">Tenho Interesse</button>
+      </div>
+
+      <div class="card">
+        <h3>Marketing Digital</h3>
+        <p>Estratégias para aumentar sua presença online.</p>
+        <button onclick="trackCustomEvent('interesse_marketing')">Tenho Interesse</button>
+      </div>
+    </div>
+
+    <div class="analytics-demo" style="margin-top: 3rem;">
+      <h3>🎯 Teste o Tracking Personalizado</h3>
+      <p>Clique nos botões "Tenho Interesse" acima. Esses cliques serão rastreados como eventos personalizados!</p>
+      <p style="margin-top: 1rem;">
+        Link externo de teste: 
+        <a href="https://www.google.com" target="_blank">Ir para o Google</a>
+        (Este clique será rastreado)
+      </p>
+    </div>
+  </div>
+
+  <footer>
+    <p>&copy; 2026 Site de Exemplo - Monitorado por Syntax Analytics</p>
+  </footer>
+
+  <!-- 
+    =========================================
+    SYNTAX ANALYTICS - CÓDIGO DE TRACKING
+    =========================================
+    
+    INSTRUÇÕES:
+    1. Pegue o código de tracking no dashboard
+    2. Substitua o conteúdo abaixo com o código real
+    3. O código deve incluir seu SYNTAX_SITE_ID único
+    
+    Por enquanto, este é um exemplo que não enviará dados reais.
+  -->
+  
+  <script>
+    // SUBSTITUA ESTAS VARIÁVEIS COM OS VALORES DO SEU DASHBOARD
+    window.SYNTAX_SITE_ID = 'COLE_SEU_SITE_ID_AQUI';
+    window.SYNTAX_PROJECT_ID = 'COLE_SEU_PROJECT_ID_AQUI';
+  </script>
+  
+  <script>
+    // Função para eventos customizados
+    function trackCustomEvent(eventName) {
+      if (window.syntaxAnalytics) {
+        window.syntaxAnalytics.track(eventName);
+        alert('Evento rastreado: ' + eventName);
+      } else {
+        alert('Syntax Analytics não está configurado. Cole o código de tracking do dashboard.');
+      }
+    }
+  </script>
+
+  <!-- COLE O CÓDIGO DE TRACKING DO SYNTAX ANALYTICS AQUI -->
+  <!-- O código completo virá do modal "Ver Código de Tracking" no dashboard -->
+  
+</body>
+</html>

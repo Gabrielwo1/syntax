@@ -1,0 +1,1407 @@
+import { Hono } from "npm:hono";
+import { cors } from "npm:hono/cors";
+import { logger } from "npm:hono/logger";
+import { createClient } from "npm:@supabase/supabase-js";
+import * as kv from "./kv_store.tsx";
+const app = new Hono();
+
+// Enable logger
+app.use('*', logger(console.log));
+
+// Enable CORS for all routes and methods
+app.use(
+  "/*",
+  cors({
+    origin: "*",
+    allowHeaders: ["Content-Type", "Authorization", "apikey"],
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    exposeHeaders: ["Content-Length"],
+    maxAge: 600,
+  }),
+);
+
+// ─── Auth helper ─────────────────────────────────────────────────────────────
+// Extracts the user JWT from the Authorization header and validates it.
+// Returns the authenticated user or an error response.
+// IMPORTANT: The anon key JWT does NOT have a `sub` claim, so passing it to
+// `supabase.auth.getUser()` crashes with "missing sub claim". We detect this
+// early and return a clear error instead.
+async function requireAdmin(c: any): Promise<{ user: any; supabase: any } | Response> {
+  const accessToken = c.req.header('Authorization')?.split(' ')[1];
+  if (!accessToken) {
+    return c.json({ error: "Unauthorized: token ausente" }, 401);
+  }
+
+  // Quick JWT decode to check for `sub` claim — anon keys don't have one.
+  // JWTs use base64URL encoding: must replace - → + and _ → / before atob(),
+  // then restore the stripped padding. Without this, atob() throws on many
+  // real-world JWTs (Deno's atob() is strict about the base64 alphabet).
+  try {
+    const part = accessToken.split('.')[1] ?? '';
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded));
+    if (!payload.sub) {
+      console.warn("[Auth] Received anon-key instead of user JWT. User must sign in.");
+      return c.json({
+        error: "Sessão expirada. Faça logout e login novamente.",
+        code: "SESSION_EXPIRED",
+      }, 401);
+    }
+  } catch {
+    return c.json({ error: "Token inválido ou malformado" }, 401);
+  }
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  );
+
+  const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+  if (error || !user) {
+    console.error("[Auth] getUser error:", error?.message);
+    // Detect expired token — message varies across Supabase versions
+    const isExpired =
+      error?.message?.toLowerCase().includes('expired') ||
+      error?.message?.toLowerCase().includes('invalid jwt') ||
+      error?.status === 401;
+    return c.json({
+      error: `Unauthorized: ${error?.message || "token inválido ou expirado"}`,
+      code: isExpired ? 'SESSION_EXPIRED' : 'INVALID_TOKEN',
+    }, 401);
+  }
+
+  if (user.user_metadata?.role !== 'admin') {
+    return c.json({ error: "Forbidden: apenas administradores" }, 403);
+  }
+
+  return { user, supabase };
+}
+
+// ─── Lightweight auth check (non-admin routes) ────────────────────────────────
+// Like requireAdmin but only verifies the user exists — doesn't check role.
+// Returns the user or a Response (caller must check with instanceof Response).
+async function requireAuth(c: any): Promise<{ user: any } | Response> {
+  const accessToken = c.req.header('Authorization')?.split(' ')[1];
+  if (!accessToken) {
+    return c.json({ error: 'Unauthorized: token ausente' }, 401);
+  }
+
+  // Reject anon-key JWTs (no sub claim)
+  try {
+    const part = accessToken.split('.')[1] ?? '';
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded));
+    if (!payload.sub) {
+      return c.json({ error: 'Sessão expirada. Faça login novamente.', code: 'SESSION_EXPIRED' }, 401);
+    }
+  } catch {
+    return c.json({ error: 'Token inválido ou malformado' }, 401);
+  }
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  );
+
+  const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+  if (error || !user) {
+    const isExpired =
+      error?.message?.toLowerCase().includes('expired') ||
+      error?.message?.toLowerCase().includes('invalid jwt') ||
+      error?.status === 401;
+    return c.json({
+      error: `Unauthorized: ${error?.message ?? 'token inválido ou expirado'}`,
+      code: isExpired ? 'SESSION_EXPIRED' : 'INVALID_TOKEN',
+    }, 401);
+  }
+
+  return { user };
+}
+
+// ─── Storage bucket initialization ───────────────────────────────────────────
+const BUCKET_PDFS = "make-cee56a32-pdfs";
+const BUCKET_REPO = "make-cee56a32-repo";
+
+async function ensureBucket(
+  supabase: any,
+  name: string,
+  opts: Record<string, any> = {},
+) {
+  try {
+    const { data: buckets, error } = await supabase.storage.listBuckets();
+    if (error) { console.error(`[Storage] listBuckets error:`, error); return; }
+    if (!buckets?.some((b: any) => b.name === name)) {
+      await supabase.storage.createBucket(name, { public: false, ...opts });
+      console.log(`[Storage] Bucket "${name}" created.`);
+    }
+  } catch (e) {
+    console.error(`[Storage] ensureBucket("${name}") error:`, e);
+  }
+}
+
+try {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (supabaseUrl && supabaseKey) {
+    const adminClient = createClient(supabaseUrl, supabaseKey);
+    await ensureBucket(adminClient, BUCKET_PDFS, { allowedMimeTypes: ['application/pdf'] });
+    await ensureBucket(adminClient, BUCKET_REPO);
+  }
+} catch (error) {
+  console.error("[Storage] Initialization error:", error);
+}
+
+// Health check endpoint
+app.get("/make-server-cee56a32/health", (c) => {
+  return c.json({ 
+    status: "ok", 
+    supabaseUrl: Deno.env.get('SUPABASE_URL'),
+    supabaseKeyStart: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.substring(0, 10) 
+  });
+});
+
+// Analytics endpoint - Track page views and events
+app.post("/make-server-cee56a32/track", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { siteId, event, page, referrer, userAgent, screenSize } = body;
+
+    if (!siteId || !event) {
+      return c.json({ error: "siteId and event are required" }, 400);
+    }
+
+    const timestamp = new Date().toISOString();
+    const eventId = `${siteId}:event:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`;
+
+    // Store the event
+    await kv.set(eventId, {
+      siteId,
+      event,
+      page,
+      referrer,
+      userAgent,
+      screenSize,
+      timestamp,
+    });
+
+    // Update site stats
+    const statsKey = `${siteId}:stats`;
+    const stats = await kv.get(statsKey) || {
+      totalVisits: 0,
+      uniqueVisitors: 0,
+      pageViews: {},
+      devices: { desktop: 0, mobile: 0, tablet: 0 },
+      lastUpdated: timestamp,
+    };
+
+    if (event === "pageview") {
+      stats.totalVisits++;
+      stats.pageViews[page] = (stats.pageViews[page] || 0) + 1;
+
+      // Detect device type from screen size
+      if (screenSize) {
+        const width = parseInt(screenSize.split('x')[0]);
+        if (width < 768) stats.devices.mobile++;
+        else if (width < 1024) stats.devices.tablet++;
+        else stats.devices.desktop++;
+      }
+    }
+
+    stats.lastUpdated = timestamp;
+    await kv.set(statsKey, stats);
+
+    return c.json({ success: true, eventId });
+  } catch (error) {
+    console.error("Error tracking event:", error);
+    return c.json({ error: "Failed to track event", details: error.message }, 500);
+  }
+});
+
+// Get analytics for a specific site
+app.get("/make-server-cee56a32/analytics/:siteId", async (c) => {
+  try {
+    const { siteId } = c.req.param();
+    const statsKey = `${siteId}:stats`;
+    const stats = await kv.get(statsKey);
+
+    if (!stats) {
+      return c.json({
+        totalVisits: 0,
+        uniqueVisitors: 0,
+        pageViews: {},
+        devices: { desktop: 0, mobile: 0, tablet: 0 },
+      });
+    }
+
+    return c.json(stats);
+  } catch (error) {
+    console.error("Error fetching analytics:", error);
+    return c.json({ error: "Failed to fetch analytics", details: error.message }, 500);
+  }
+});
+
+// Get recent events for a site
+app.get("/make-server-cee56a32/events/:siteId", async (c) => {
+  try {
+    const { siteId } = c.req.param();
+    const limit = parseInt(c.req.query("limit") || "100");
+    
+    // Get all events for this site
+    const allEvents = await kv.getByPrefix(`${siteId}:event:`);
+    
+    // Sort by timestamp and limit
+    const sortedEvents = allEvents
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, limit);
+
+    return c.json({ events: sortedEvents, count: sortedEvents.length });
+  } catch (error) {
+    console.error("Error fetching events:", error);
+    return c.json({ error: "Failed to fetch events", details: error.message }, 500);
+  }
+});
+
+// Manage sites - Create or update site
+app.post("/make-server-cee56a32/sites", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { name, url, clientName, clientEmail, clientPhone } = body;
+
+    if (!name || !url) {
+      return c.json({ error: "name and url are required" }, 400);
+    }
+
+    const siteId = `site:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`;
+    const site = {
+      id: siteId,
+      name,
+      url,
+      status: "active",
+      client: {
+        name: clientName,
+        email: clientEmail,
+        phone: clientPhone,
+      },
+      createdAt: new Date().toISOString(),
+      lastUpdated: new Date().toISOString(),
+    };
+
+    await kv.set(siteId, site);
+    
+    // Also add to sites list
+    const sitesList = await kv.get("sites:list") || [];
+    sitesList.push(siteId);
+    await kv.set("sites:list", sitesList);
+
+    return c.json({ success: true, site });
+  } catch (error: any) {
+    console.error("Error creating site:", error);
+    return c.json({ error: "Failed to create site", details: error?.message || String(error) }, 500);
+  }
+});
+
+// Get all sites
+app.get("/make-server-cee56a32/sites", async (c) => {
+  // Require authenticated user (not just gateway-level JWT validation)
+  const authResult = await requireAuth(c);
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const sitesList = await kv.get("sites:list") || [];
+    
+    if (!Array.isArray(sitesList) || sitesList.length === 0) {
+      return c.json({ sites: [] });
+    }
+    
+    let sites = [];
+    try {
+      sites = await kv.mget(sitesList);
+    } catch (mgetError) {
+      console.error("Error in mget:", mgetError);
+      // Se falhar o mget, tentamos pegar individualmente como fallback
+      sites = await Promise.all(sitesList.map(id => kv.get(id).catch(() => null)));
+    }
+    
+    const validSites = sites.filter(Boolean);
+    
+    // Get stats for each site
+    const sitesWithStats = await Promise.all(
+      validSites.map(async (site) => {
+        try {
+          const stats = await kv.get(`${site.id}:stats`) || {
+            totalVisits: 0,
+            uniqueVisitors: 0,
+            pageViews: {},
+            devices: { desktop: 0, mobile: 0, tablet: 0 },
+          };
+          
+          return {
+            ...site,
+            analytics: {
+              totalVisits: stats.totalVisits || 0,
+              uniqueVisitors: stats.uniqueVisitors || 0,
+              bounceRate: 0,
+              avgSessionDuration: "0m 0s",
+              trend: 0,
+            },
+          };
+        } catch (e) {
+          return {
+            ...site,
+            analytics: {
+              totalVisits: 0, uniqueVisitors: 0, bounceRate: 0, avgSessionDuration: "0m 0s", trend: 0
+            }
+          };
+        }
+      })
+    );
+
+    return c.json({ sites: sitesWithStats });
+  } catch (error: any) {
+    console.error("Error fetching sites:", error);
+    return c.json({ error: "Failed to fetch sites", details: error?.message || String(error) }, 500);
+  }
+});
+
+// Get a single site by ID
+app.get("/make-server-cee56a32/sites/:siteId", async (c) => {
+  try {
+    const { siteId } = c.req.param();
+    const site = await kv.get(siteId);
+
+    if (!site) {
+      return c.json({ error: "Site not found" }, 404);
+    }
+
+    const stats = await kv.get(`${siteId}:stats`) || {
+      totalVisits: 0,
+      uniqueVisitors: 0,
+      pageViews: {},
+      devices: { desktop: 0, mobile: 0, tablet: 0 },
+    };
+
+    return c.json({
+      ...site,
+      analytics: {
+        totalVisits: stats.totalVisits || 0,
+        uniqueVisitors: stats.uniqueVisitors || 0,
+        bounceRate: 0,
+        avgSessionDuration: "0m 0s",
+        trend: 0,
+        pageViews: stats.pageViews || {},
+        devices: stats.devices || { desktop: 0, mobile: 0, tablet: 0 },
+        lastUpdated: stats.lastUpdated,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching site:", error);
+    return c.json({ error: "Failed to fetch site", details: error?.message || String(error) }, 500);
+  }
+});
+
+// ─── CRM ENDPOINTS ────────────────────────────────────────────────────────────
+
+// Copy Prospect endpoints
+app.get("/make-server-cee56a32/crm/copy-prospect", async (c) => {
+  try {
+    const data = (await kv.get("crm:copy_prospect:groups")) || [];
+    return c.json({ groups: data });
+  } catch (error) {
+    console.error("[CRM] Error fetching copy prospect groups:", error);
+    return c.json({ error: "Failed to fetch groups", details: String(error) }, 500);
+  }
+});
+
+app.post("/make-server-cee56a32/crm/copy-prospect", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { groups } = body;
+    await kv.set("crm:copy_prospect:groups", groups || []);
+    return c.json({ success: true, groups: groups || [] });
+  } catch (error) {
+    console.error("[CRM] Error saving copy prospect groups:", error);
+    return c.json({ error: "Failed to save groups", details: String(error) }, 500);
+  }
+});
+
+// Create lead
+app.post("/make-server-cee56a32/crm/leads", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { name, company, email, phone, website, service, budget, source, priority, notes, responsible, nextFollowUp, folderId } = body;
+
+    if (!name || !email) {
+      return c.json({ error: "name and email are required" }, 400);
+    }
+
+    const id = `crm:lead:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`;
+    const lead = {
+      id,
+      name,
+      company: company || "",
+      email,
+      phone: phone || "",
+      website: website || "",
+      service: service || "",
+      budget: budget || "",
+      source: source || "Outro",
+      priority: priority || "media",
+      notes: notes || "",
+      responsible: responsible || "",
+      nextFollowUp: nextFollowUp || null,
+      folderId: folderId || "geral",
+      stage: "novo",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      activities: [],
+    };
+
+    await kv.set(id, lead);
+
+    const list = (await kv.get("crm:leads:list")) || [];
+    list.push(id);
+    await kv.set("crm:leads:list", list);
+
+    console.log("[CRM] Lead created:", id);
+    return c.json({ success: true, lead });
+  } catch (error) {
+    console.error("[CRM] Error creating lead:", error);
+    return c.json({ error: "Failed to create lead", details: String(error) }, 500);
+  }
+});
+
+// List all leads
+app.get("/make-server-cee56a32/crm/leads", async (c) => {
+  try {
+    const list = (await kv.get("crm:leads:list")) || [];
+    if (list.length === 0) return c.json({ leads: [] });
+    const leads = (await kv.mget(list)).filter(Boolean);
+    leads.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return c.json({ leads });
+  } catch (error) {
+    console.error("[CRM] Error listing leads:", error);
+    return c.json({ error: "Failed to list leads", details: String(error) }, 500);
+  }
+});
+
+// Update lead
+app.put("/make-server-cee56a32/crm/leads/:id", async (c) => {
+  try {
+    const rawId = c.req.param("id");
+    const id = decodeURIComponent(rawId);
+    const body = await c.req.json();
+
+    const existing = await kv.get(id);
+    if (!existing) return c.json({ error: "Lead not found" }, 404);
+
+    // Append activity if stage changed
+    const activities = existing.activities || [];
+    if (body.stage && body.stage !== existing.stage) {
+      activities.push({
+        type: "stage_change",
+        from: existing.stage,
+        to: body.stage,
+        at: new Date().toISOString(),
+        note: body.activityNote || "",
+      });
+    }
+    if (body.activityNote && !body.stage) {
+      activities.push({
+        type: "note",
+        text: body.activityNote,
+        at: new Date().toISOString(),
+      });
+    }
+
+    const updated = { ...existing, ...body, activities, updatedAt: new Date().toISOString() };
+    delete updated.activityNote;
+    await kv.set(id, updated);
+
+    return c.json({ success: true, lead: updated });
+  } catch (error) {
+    console.error("[CRM] Error updating lead:", error);
+    return c.json({ error: "Failed to update lead", details: String(error) }, 500);
+  }
+});
+
+// Delete lead
+app.delete("/make-server-cee56a32/crm/leads/:id", async (c) => {
+  try {
+    const id = decodeURIComponent(c.req.param("id"));
+    await kv.del(id);
+    const list = ((await kv.get("crm:leads:list")) || []).filter((lid: string) => lid !== id);
+    await kv.set("crm:leads:list", list);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("[CRM] Error deleting lead:", error);
+    return c.json({ error: "Failed to delete lead", details: String(error) }, 500);
+  }
+});
+
+// Bulk create leads (avoids race condition on crm:leads:list)
+app.post("/make-server-cee56a32/crm/leads/bulk", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { leads: leadsData, folderId: bulkFolderId } = body;
+
+    if (!Array.isArray(leadsData) || leadsData.length === 0) {
+      return c.json({ error: "leads array is required" }, 400);
+    }
+
+    // Read the list once
+    const list: string[] = (await kv.get("crm:leads:list")) || [];
+    const createdLeads: any[] = [];
+
+    for (const leadData of leadsData) {
+      const name =
+        leadData.name ||
+        (leadData.email ? leadData.email.split("@")[0] : "Lead Sem Nome");
+      const email =
+        leadData.email ||
+        `${name.toLowerCase().replace(/\s+/g, "")}_${Date.now()}@exemplo.com`;
+
+      const id = `crm:lead:${Date.now()}:${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+
+      const lead = {
+        id,
+        name,
+        company: leadData.company || "",
+        email,
+        phone: leadData.phone || "",
+        website: leadData.website || "",
+        service: leadData.service || "",
+        budget: leadData.budget || "",
+        source: leadData.source || "Outro",
+        priority: leadData.priority || "media",
+        notes: leadData.notes || "",
+        responsible: leadData.responsible || "",
+        nextFollowUp: leadData.nextFollowUp || null,
+        folderId: bulkFolderId || leadData.folderId || "geral",
+        stage: leadData.stage || "novo",
+        isClient: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        activities: [],
+      };
+
+      await kv.set(id, lead);
+      list.push(id);
+      createdLeads.push(lead);
+    }
+
+    // Single atomic write to the list after all leads are stored
+    await kv.set("crm:leads:list", list);
+
+    console.log(`[CRM] Bulk created ${createdLeads.length} leads`);
+    return c.json({ success: true, leads: createdLeads, count: createdLeads.length });
+  } catch (error) {
+    console.error("[CRM] Error bulk creating leads:", error);
+    return c.json({ error: "Failed to bulk create leads", details: String(error) }, 500);
+  }
+});
+
+// ─── CRM FOLDERS ENDPOINTS ──────────────────────────────────────────────────
+
+app.get("/make-server-cee56a32/crm/folders", async (c) => {
+  try {
+    const defaultFolders = [
+      { id: "geral", name: "Geral" },
+      { id: "b2b", name: "Leads B2B" },
+      { id: "e-commerce", name: "E-commerce" },
+      { id: "clinicas-sudoeste", name: "Clínicas Sudoeste" }
+    ];
+    const folders = await kv.get("crm:folders");
+    if (!folders) {
+      await kv.set("crm:folders", defaultFolders);
+      return c.json({ folders: defaultFolders });
+    }
+    return c.json({ folders });
+  } catch (error) {
+    console.error("[CRM] Error fetching folders:", error);
+    return c.json({ error: "Failed to fetch folders", details: String(error) }, 500);
+  }
+});
+
+app.put("/make-server-cee56a32/crm/folders", async (c) => {
+  try {
+    const body = await c.req.json();
+    if (!body.folders) {
+      return c.json({ error: "folders array is required" }, 400);
+    }
+    await kv.set("crm:folders", body.folders);
+    return c.json({ success: true, folders: body.folders });
+  } catch (error) {
+    console.error("[CRM] Error updating folders:", error);
+    return c.json({ error: "Failed to update folders", details: String(error) }, 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PageSpeed proxy — avoids CORS issues when calling Google API from the browser
+app.get("/make-server-cee56a32/pagespeed", async (c) => {
+  try {
+    const url = c.req.query("url");
+    const strategy = c.req.query("strategy") || "mobile";
+
+    if (!url) {
+      return c.json({ error: "url query param is required" }, 400);
+    }
+
+    const apiUrl = new URL("https://www.googleapis.com/pagespeedonline/v5/runPagespeed");
+    apiUrl.searchParams.set("url", url);
+    apiUrl.searchParams.set("strategy", strategy);
+    apiUrl.searchParams.set("category", "performance");
+    
+    const apiKey = Deno.env.get("PAGESPEED_API_KEY");
+    if (apiKey) {
+      apiUrl.searchParams.set("key", apiKey);
+    }
+
+    console.log(`[PageSpeed] Fetching: ${strategy} / ${url}`);
+    const res = await fetch(apiUrl.toString());
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.log("[PageSpeed] Google API error:", JSON.stringify(data?.error));
+      return c.json(
+        { error: data?.error?.message || `Google API error ${res.status}`, details: data?.error },
+        res.status as any
+      );
+    }
+
+    return c.json(data);
+  } catch (error) {
+    console.error("[PageSpeed] Unexpected error:", error);
+    return c.json({ error: "Failed to fetch PageSpeed data", details: String(error) }, 500);
+  }
+});
+
+// ─── FINANCEIRO ENDPOINTS ─────────────────────────────────────────────────────
+
+// List all financial entries
+app.get("/make-server-cee56a32/financeiro/entries", async (c) => {
+  try {
+    const list = (await kv.get("financeiro:entries:list")) || [];
+    if (list.length === 0) return c.json({ entries: [] });
+    const entries = (await kv.mget(list)).filter(Boolean);
+    entries.sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    return c.json({ entries });
+  } catch (error) {
+    console.error("[Financeiro] Error listing entries:", error);
+    return c.json({ error: "Failed to list entries", details: String(error) }, 500);
+  }
+});
+
+// Create financial entry
+app.post("/make-server-cee56a32/financeiro/entries", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { type, description, amount, dueDate, category, clientOrSupplier, notes, recurrence } = body;
+
+    if (!type || !description || amount === undefined || !dueDate) {
+      return c.json({ error: "type, description, amount and dueDate are required" }, 400);
+    }
+
+    const id = `fin:entry:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`;
+    const entry = {
+      id,
+      type, // "receivable" | "payable"
+      description,
+      amount: parseFloat(amount),
+      dueDate,
+      category: category || "Outros",
+      clientOrSupplier: clientOrSupplier || "",
+      notes: notes || "",
+      recurrence: recurrence || "none",
+      status: "pending", // "pending" | "paid"
+      paidAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await kv.set(id, entry);
+    const list = (await kv.get("financeiro:entries:list")) || [];
+    list.push(id);
+    await kv.set("financeiro:entries:list", list);
+
+    console.log("[Financeiro] Entry created:", id);
+    return c.json({ success: true, entry });
+  } catch (error) {
+    console.error("[Financeiro] Error creating entry:", error);
+    return c.json({ error: "Failed to create entry", details: String(error) }, 500);
+  }
+});
+
+// Update financial entry (also used to mark as paid)
+app.put("/make-server-cee56a32/financeiro/entries/:id", async (c) => {
+  try {
+    const id = decodeURIComponent(c.req.param("id"));
+    const body = await c.req.json();
+
+    const existing = await kv.get(id);
+    if (!existing) return c.json({ error: "Entry not found" }, 404);
+
+    const updated = {
+      ...existing,
+      ...body,
+      id, // ensure id is not overwritten
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Auto-set paidAt when marking as paid
+    if (body.status === "paid" && existing.status !== "paid") {
+      updated.paidAt = new Date().toISOString();
+    }
+    if (body.status === "pending") {
+      updated.paidAt = null;
+    }
+
+    await kv.set(id, updated);
+    return c.json({ success: true, entry: updated });
+  } catch (error) {
+    console.error("[Financeiro] Error updating entry:", error);
+    return c.json({ error: "Failed to update entry", details: String(error) }, 500);
+  }
+});
+
+// Delete financial entry
+app.delete("/make-server-cee56a32/financeiro/entries/:id", async (c) => {
+  try {
+    const id = decodeURIComponent(c.req.param("id"));
+    await kv.del(id);
+    const list = ((await kv.get("financeiro:entries:list")) || []).filter((eid: string) => eid !== id);
+    await kv.set("financeiro:entries:list", list);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("[Financeiro] Error deleting entry:", error);
+    return c.json({ error: "Failed to delete entry", details: String(error) }, 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── AUTH ENDPOINTS ───────────────────────────────────────────────────────────
+
+// Check if system has any users (for first-time setup)
+app.get("/make-server-cee56a32/auth/check-init", async (c) => {
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+    const { data, error } = await supabase.auth.admin.listUsers();
+    if (error) return c.json({ error: error.message }, 500);
+    return c.json({ initialized: data && data.users.length > 0 });
+  } catch (error) {
+    console.error("[Auth] Error checking init:", error);
+    return c.json({ error: String(error) }, 500);
+  }
+});
+
+// Create first admin user (only if no users exist)
+app.post("/make-server-cee56a32/auth/init", async (c) => {
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+    const { data: existingUsers } = await supabase.auth.admin.listUsers();
+    if (existingUsers && existingUsers.users.length > 0) {
+      return c.json({ error: "Sistema já inicializado. Use o painel admin para criar mais usuários." }, 400);
+    }
+    const body = await c.req.json();
+    const { email, password, name } = body;
+    if (!email || !password) {
+      return c.json({ error: "email and password are required" }, 400);
+    }
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      user_metadata: { name: name || email.split('@')[0], role: 'admin' },
+      email_confirm: true,
+    });
+    if (error) return c.json({ error: error.message }, 400);
+    console.log("[Auth] First admin created:", email);
+    return c.json({ success: true, user: data.user });
+  } catch (error) {
+    console.error("[Auth] Error initializing admin:", error);
+    return c.json({ error: "Failed to initialize admin", details: String(error) }, 500);
+  }
+});
+
+// Create user (admin only)
+app.post("/make-server-cee56a32/auth/signup", async (c) => {
+  const adminCheck = await requireAdmin(c);
+  if (adminCheck instanceof Response) return adminCheck;
+
+  try {
+    const body = await c.req.json();
+    const { email, password, name, role, permissions } = body;
+
+    console.log("[Auth] Creating user - email:", email, "role:", role, "permissions count:", Array.isArray(permissions) ? permissions.length : 'N/A');
+
+    if (!email || !password) return c.json({ error: "E-mail e senha são obrigatórios" }, 400);
+    if (!email.includes('@')) return c.json({ error: "Formato de e-mail inválido" }, 400);
+    if (password.length < 6) return c.json({ error: "A senha deve ter pelo menos 6 caracteres" }, 400);
+
+    const safePermissions = Array.isArray(permissions)
+      ? permissions.filter((p: any) => typeof p === 'string')
+      : [];
+
+    const { data, error } = await adminCheck.supabase.auth.admin.createUser({
+      email: email.trim().toLowerCase(),
+      password,
+      user_metadata: {
+        name: (name || '').trim() || email.split('@')[0],
+        role: role || 'member',
+        permissions: safePermissions,
+      },
+      email_confirm: true,
+    });
+
+    if (error) {
+      const errMsg = error.message || (error as any).code || JSON.stringify(error);
+      console.error("[Auth] Supabase createUser error:", errMsg, JSON.stringify(error));
+      return c.json({ error: errMsg || "Erro ao criar usuário no Supabase", details: JSON.stringify(error) }, 400);
+    }
+
+    console.log("[Auth] User created by admin:", email, "role:", role);
+    return c.json({ success: true, user: data.user });
+  } catch (error: any) {
+    console.error("[Auth] Error creating user:", error);
+    return c.json({ error: "Failed to create user", details: String(error) }, 500);
+  }
+});
+
+// List users (admin only)
+app.get("/make-server-cee56a32/auth/users", async (c) => {
+  const adminCheck = await requireAdmin(c);
+  if (adminCheck instanceof Response) return adminCheck;
+
+  try {
+    const { data, error } = await adminCheck.supabase.auth.admin.listUsers();
+    if (error) return c.json({ error: error.message }, 500);
+
+    return c.json({ users: data.users });
+  } catch (error) {
+    console.error("[Auth] Error listing users:", error);
+    return c.json({ error: "Failed to list users", details: String(error) }, 500);
+  }
+});
+
+// Update user role/name (admin only)
+app.put("/make-server-cee56a32/auth/users/:id", async (c) => {
+  const adminCheck = await requireAdmin(c);
+  if (adminCheck instanceof Response) return adminCheck;
+
+  try {
+    const userId = c.req.param('id');
+    const body = await c.req.json();
+    const { name, role, password, permissions } = body;
+
+    // Fetch existing metadata to merge
+    const { data: existingUser } = await adminCheck.supabase.auth.admin.getUserById(userId);
+    const existingMeta = existingUser?.user?.user_metadata || {};
+
+    const updateData: any = {
+      user_metadata: {
+        ...existingMeta,
+        ...(name !== undefined && { name }),
+        ...(role !== undefined && { role }),
+        ...(permissions !== undefined && { permissions }),
+      }
+    };
+    if (password) updateData.password = password;
+
+    const { data, error } = await adminCheck.supabase.auth.admin.updateUserById(userId, updateData);
+    if (error) return c.json({ error: error.message }, 500);
+
+    console.log("[Auth] User updated:", userId, "role:", role);
+    return c.json({ success: true, user: data.user });
+  } catch (error) {
+    console.error("[Auth] Error updating user:", error);
+    return c.json({ error: "Failed to update user", details: String(error) }, 500);
+  }
+});
+
+// Delete user (admin only)
+app.delete("/make-server-cee56a32/auth/users/:id", async (c) => {
+  const adminCheck = await requireAdmin(c);
+  if (adminCheck instanceof Response) return adminCheck;
+
+  try {
+    const userId = c.req.param('id');
+    if (userId === adminCheck.user.id) {
+      return c.json({ error: "Você não pode excluir sua própria conta" }, 400);
+    }
+
+    const { error } = await adminCheck.supabase.auth.admin.deleteUser(userId);
+    if (error) return c.json({ error: error.message }, 500);
+
+    console.log("[Auth] User deleted:", userId);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("[Auth] Error deleting user:", error);
+    return c.json({ error: "Failed to delete user", details: String(error) }, 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── TASKS ENDPOINTS ──────────────────────────────────────────────────────────
+
+// List all tasks
+app.get("/make-server-cee56a32/tasks", async (c) => {
+  try {
+    const list = (await kv.get("tasks:list")) || [];
+    if (list.length === 0) return c.json({ tasks: [] });
+    const tasks = (await kv.mget(list)).filter(Boolean);
+    tasks.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return c.json({ tasks });
+  } catch (error) {
+    console.error("[Tasks] Error listing tasks:", error);
+    return c.json({ error: "Failed to list tasks", details: String(error) }, 500);
+  }
+});
+
+// Create task
+app.post("/make-server-cee56a32/tasks", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { name, project, assignee, due, status, attachments } = body;
+
+    if (!name) {
+      return c.json({ error: "name is required" }, 400);
+    }
+
+    const id = `task:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`;
+    const task = {
+      id,
+      name,
+      project: project || "",
+      assignee: assignee || "",
+      due: due || "",
+      status: status || "not_started",
+      attachments: attachments || [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await kv.set(id, task);
+    const list = (await kv.get("tasks:list")) || [];
+    list.push(id);
+    await kv.set("tasks:list", list);
+
+    console.log("[Tasks] Task created:", id);
+    return c.json({ success: true, task });
+  } catch (error) {
+    console.error("[Tasks] Error creating task:", error);
+    return c.json({ error: "Failed to create task", details: String(error) }, 500);
+  }
+});
+
+// Update task
+app.put("/make-server-cee56a32/tasks/:id", async (c) => {
+  try {
+    const id = decodeURIComponent(c.req.param("id"));
+    const body = await c.req.json();
+
+    const existing = await kv.get(id);
+    if (!existing) return c.json({ error: "Task not found" }, 404);
+
+    const updated = { ...existing, ...body, id, updatedAt: new Date().toISOString() };
+    await kv.set(id, updated);
+
+    return c.json({ success: true, task: updated });
+  } catch (error) {
+    console.error("[Tasks] Error updating task:", error);
+    return c.json({ error: "Failed to update task", details: String(error) }, 500);
+  }
+});
+
+// Delete task
+app.delete("/make-server-cee56a32/tasks/:id", async (c) => {
+  try {
+    const id = decodeURIComponent(c.req.param("id"));
+    await kv.del(id);
+    const list = ((await kv.get("tasks:list")) || []).filter((tid: string) => tid !== id);
+    await kv.set("tasks:list", list);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("[Tasks] Error deleting task:", error);
+    return c.json({ error: "Failed to delete task", details: String(error) }, 500);
+  }
+});
+
+// AI task generation — proxies Gemini so the API key stays server-side
+app.post("/make-server-cee56a32/tasks/ai-generate", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { text } = body;
+
+    if (!text?.trim()) {
+      return c.json({ error: "text is required" }, 400);
+    }
+
+    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+    if (!geminiApiKey) {
+      return c.json({ error: "GEMINI_API_KEY not configured on the server" }, 500);
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    const prompt = `Você é um assistente de extração de tarefas de sistema B2B. Analise o seguinte texto e extraia 1 ou mais tarefas contidas nele. Se o texto mencionar várias tarefas, extraia todas elas.
+Retorne estritamente um JSON de array contendo objetos com as seguintes propriedades:
+- name (string, o nome ou título limpo da tarefa. Remova palavras de comando como 'criar', 'adicionar tarefa', etc.)
+- project (string, o nome do projeto se mencionado, senão string vazia)
+- assignee (string, o nome da pessoa responsável se mencionado, senão string vazia)
+- due (string, a data de entrega no formato YYYY-MM-DD, baseando-se que a data atual é ${today}. Se for amanhã, adicione 1 dia, se não mencionado, string vazia)
+- status (string, sempre "not_started")
+- attachments (array vazio [])
+
+Exemplo esperado de resposta JSON:
+[{"name":"Revisar design do login","project":"App Beta","assignee":"João","due":"2024-12-25","status":"not_started","attachments":[]}]
+
+Texto a ser analisado: "${text.replace(/"/g, "'")}"`;
+
+    console.log("[Tasks AI] Calling Gemini for text length:", text.length);
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1 },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      console.error("[Tasks AI] Gemini error:", JSON.stringify(errData));
+      return c.json(
+        { error: `Gemini API error ${response.status}`, details: errData },
+        500
+      );
+    }
+
+    const data = await response.json();
+    let extractedText = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+    // Strip markdown code fences if present
+    extractedText = extractedText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+    // Extract JSON array from the response
+    const jsonMatch = extractedText.match(/\[[\s\S]*\]/);
+    extractedText = jsonMatch ? jsonMatch[0] : extractedText;
+
+    let tasks = JSON.parse(extractedText);
+    if (!Array.isArray(tasks)) tasks = [tasks];
+
+    console.log("[Tasks AI] Generated", tasks.length, "task(s)");
+    return c.json({ success: true, tasks });
+  } catch (error) {
+    console.error("[Tasks AI] Error generating tasks:", error);
+    return c.json({ error: "Failed to generate tasks with AI", details: String(error) }, 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF SYNTAX ENDPOINTS
+
+// Upload PDF
+app.post("/make-server-cee56a32/pdfs", async (c) => {
+  try {
+    const body = await c.req.parseBody();
+    const file = body['file'] as File;
+    const title = body['title'] as string;
+
+    if (!file || !title) {
+      return c.json({ error: "file and title are required" }, 400);
+    }
+
+    if (file.type !== "application/pdf") {
+      return c.json({ error: "Only PDF files are allowed" }, 400);
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !supabaseKey) {
+      return c.json({ error: "Storage not configured" }, 500);
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Generate unique filename
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+    const filePath = `uploads/${fileName}`;
+
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('make-cee56a32-pdfs')
+      .upload(filePath, file, {
+        contentType: file.type,
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error("[PDFs] Upload error:", uploadError);
+      return c.json({ error: "Failed to upload file", details: uploadError.message }, 500);
+    }
+
+    // Save record to KV
+    const id = `pdf:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`;
+    const pdfRecord = {
+      id,
+      title,
+      fileName: file.name,
+      filePath,
+      size: file.size,
+      createdAt: new Date().toISOString(),
+    };
+
+    await kv.set(id, pdfRecord);
+    const list = (await kv.get("pdfs:list")) || [];
+    list.push(id);
+    await kv.set("pdfs:list", list);
+
+    return c.json({ success: true, pdf: pdfRecord });
+  } catch (error) {
+    console.error("[PDFs] Error uploading pdf:", error);
+    return c.json({ error: "Failed to upload pdf", details: String(error) }, 500);
+  }
+});
+
+// List PDFs
+app.get("/make-server-cee56a32/pdfs", async (c) => {
+  try {
+    const list = (await kv.get("pdfs:list")) || [];
+    if (list.length === 0) return c.json({ pdfs: [] });
+    
+    const pdfs = (await kv.mget(list)).filter(Boolean);
+    pdfs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
+    return c.json({ pdfs });
+  } catch (error) {
+    console.error("[PDFs] Error listing pdfs:", error);
+    return c.json({ error: "Failed to list pdfs", details: String(error) }, 500);
+  }
+});
+
+// Get PDF Signed URL
+app.get("/make-server-cee56a32/pdfs/:id/url", async (c) => {
+  try {
+    const id = decodeURIComponent(c.req.param("id"));
+    const pdfRecord = await kv.get(id);
+    
+    if (!pdfRecord) {
+      return c.json({ error: "PDF not found" }, 404);
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabase = createClient(supabaseUrl!, supabaseKey!);
+
+    // Generate signed URL valid for 1 hour
+    const { data, error } = await supabase.storage
+      .from('make-cee56a32-pdfs')
+      .createSignedUrl(pdfRecord.filePath, 3600);
+
+    if (error) {
+      return c.json({ error: "Failed to generate URL", details: error.message }, 500);
+    }
+
+    return c.json({ url: data.signedUrl });
+  } catch (error) {
+    console.error("[PDFs] Error getting signed url:", error);
+    return c.json({ error: "Failed to get signed url", details: String(error) }, 500);
+  }
+});
+
+// Delete PDF
+app.delete("/make-server-cee56a32/pdfs/:id", async (c) => {
+  try {
+    const id = decodeURIComponent(c.req.param("id"));
+    const pdfRecord = await kv.get(id);
+    
+    if (!pdfRecord) {
+      return c.json({ error: "PDF not found" }, 404);
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabase = createClient(supabaseUrl!, supabaseKey!);
+
+    // Delete from storage
+    const { error: deleteError } = await supabase.storage
+      .from('make-cee56a32-pdfs')
+      .remove([pdfRecord.filePath]);
+
+    if (deleteError) {
+      console.error("[PDFs] Storage delete error:", deleteError);
+      // We continue to delete the record even if file deletion fails
+    }
+
+    // Delete from KV
+    await kv.del(id);
+    const list = ((await kv.get("pdfs:list")) || []).filter((pid: string) => pid !== id);
+    await kv.set("pdfs:list", list);
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("[PDFs] Error deleting pdf:", error);
+    return c.json({ error: "Failed to delete pdf", details: String(error) }, 500);
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+
+// ─── SOCIAL MEDIA REPOSITORY ENDPOINTS ──────────────────────────────────────
+
+// List repo items
+app.get("/make-server-cee56a32/repo", async (c) => {
+  try {
+    const list = (await kv.get("repo:list")) || [];
+    if (list.length === 0) return c.json({ items: [] });
+    const items = (await kv.mget(list)).filter(Boolean);
+    items.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return c.json({ items });
+  } catch (error) {
+    console.error("[Repo] Error listing items:", error);
+    return c.json({ error: "Failed to list items", details: String(error) }, 500);
+  }
+});
+
+// Upload repo image
+app.post("/make-server-cee56a32/repo", async (c) => {
+  try {
+    const body = await c.req.parseBody();
+    const file = body["file"] as File;
+    const title = (body["title"] as string) || "";
+    const tagsRaw = body["tags"] as string;
+    const tags = tagsRaw ? JSON.parse(tagsRaw) : [];
+
+    if (!file) return c.json({ error: "file is required" }, 400);
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !supabaseKey) return c.json({ error: "Storage not configured" }, 500);
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const fileExt = file.name.split(".").pop() || "jpg";
+    const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+    const filePath = `repo/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_REPO)
+      .upload(filePath, file, { contentType: file.type, upsert: false });
+
+    if (uploadError) {
+      console.error("[Repo] Upload error:", uploadError);
+      return c.json({ error: "Failed to upload file", details: uploadError.message }, 500);
+    }
+
+    const id = `repo:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`;
+    const item = { id, title, fileName: file.name, path: filePath, tags, createdAt: new Date().toISOString() };
+
+    await kv.set(id, item);
+    const list = (await kv.get("repo:list")) || [];
+    list.push(id);
+    await kv.set("repo:list", list);
+
+    console.log("[Repo] Item added:", id);
+    return c.json({ success: true, item });
+  } catch (error) {
+    console.error("[Repo] Error uploading:", error);
+    return c.json({ error: "Failed to upload item", details: String(error) }, 500);
+  }
+});
+
+// Get signed URL for repo attachment
+app.get("/make-server-cee56a32/repo/attachment", async (c) => {
+  try {
+    const path = c.req.query("path");
+    if (!path) return c.json({ error: "path query param required" }, 400);
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const { data, error } = await supabase.storage
+      .from(BUCKET_REPO)
+      .createSignedUrl(path, 3600);
+
+    if (error) return c.json({ error: "Failed to generate URL", details: error.message }, 500);
+    return c.json({ signedUrl: data.signedUrl });
+  } catch (error) {
+    console.error("[Repo] Error getting signed URL:", error);
+    return c.json({ error: "Failed to get signed URL", details: String(error) }, 500);
+  }
+});
+
+// Delete repo item
+app.delete("/make-server-cee56a32/repo/:id", async (c) => {
+  try {
+    const id = decodeURIComponent(c.req.param("id"));
+    const item = await kv.get(id);
+    if (!item) return c.json({ error: "Item not found" }, 404);
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    await supabase.storage.from(BUCKET_REPO).remove([item.path]);
+    await kv.del(id);
+    const list = ((await kv.get("repo:list")) || []).filter((rid: string) => rid !== id);
+    await kv.set("repo:list", list);
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("[Repo] Error deleting item:", error);
+    return c.json({ error: "Failed to delete item", details: String(error) }, 500);
+  }
+});
+
+// ─── GENERIC FILE UPLOAD (for AI task attachments) ───────────────────────────
+
+app.post("/make-server-cee56a32/upload", async (c) => {
+  try {
+    const body = await c.req.parseBody();
+    const file = body["file"] as File;
+    if (!file) return c.json({ error: "file is required" }, 400);
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !supabaseKey) return c.json({ error: "Storage not configured" }, 500);
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const fileExt = file.name.split(".").pop() || "bin";
+    const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+    const filePath = `attachments/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_REPO)
+      .upload(filePath, file, { contentType: file.type, upsert: false });
+
+    if (uploadError) {
+      console.error("[Upload] Error:", uploadError);
+      return c.json({ error: "Upload failed", details: uploadError.message }, 500);
+    }
+
+    console.log("[Upload] File uploaded:", filePath);
+    return c.json({ success: true, name: file.name, path: filePath });
+  } catch (error) {
+    console.error("[Upload] Unexpected error:", error);
+    return c.json({ error: "Failed to upload file", details: String(error) }, 500);
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+
+Deno.serve(app.fetch);
