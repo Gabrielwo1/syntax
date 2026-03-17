@@ -1,5 +1,34 @@
 import React from 'react'
+import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null }
+  static getDerivedStateFromError(error: Error) { return { error } }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error('App crash:', error, info) }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-8">
+          <div className="max-w-lg w-full bg-white rounded-xl shadow p-6 text-center">
+            <h1 className="text-xl font-semibold text-red-600 mb-2">Algo deu errado</h1>
+            <p className="text-slate-500 text-sm mb-4">Recarregue a página ou entre em contato com o suporte.</p>
+            <pre className="text-xs text-left bg-slate-100 rounded p-3 overflow-auto text-red-500">
+              {(this.state.error as Error).message}
+            </pre>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700"
+            >
+              Recarregar
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 import { Toaster } from 'sonner'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
@@ -125,6 +154,7 @@ function AppRoutes() {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <BrowserRouter>
       <AuthProvider>
         <AppRoutes />
@@ -140,5 +170,6 @@ export default function App() {
         />
       </AuthProvider>
     </BrowserRouter>
+    </ErrorBoundary>
   )
 }
