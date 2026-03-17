@@ -13,6 +13,7 @@ import {
   FileImage,
   ChevronLeft,
   ChevronRight,
+  Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO, isBefore, startOfDay } from 'date-fns'
@@ -576,6 +577,17 @@ export default function SocialMedia() {
     setDeliveredArts(prev => [...arts, ...prev])
   }
 
+  const handleDeleteRequest = async (id: string) => {
+    if (!confirm('Excluir esta solicitação?')) return
+    try {
+      await socialApi.deleteRequest(id)
+      setRequests(prev => prev.filter(r => r.id !== id))
+      toast.success('Solicitação excluída')
+    } catch {
+      toast.error('Erro ao excluir solicitação')
+    }
+  }
+
   const handleDownload = async (art: DeliveredArtRow) => {
     try {
       let url = artUrls[art.id]
@@ -721,6 +733,13 @@ export default function SocialMedia() {
                             className="text-zinc-500 hover:text-white text-sm font-medium transition px-1"
                           >
                             Editar
+                          </button>
+                          <button
+                            onClick={() => handleDeleteRequest(r.id)}
+                            className="p-1.5 text-zinc-600 hover:text-rose-400 transition rounded-lg hover:bg-rose-500/10"
+                            title="Excluir solicitação"
+                          >
+                            <Trash2 size={14} />
                           </button>
                           <button
                             onClick={() => setDeliveringReq(r)}
