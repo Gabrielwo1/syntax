@@ -35,7 +35,7 @@ const navItems: NavItem[] = [
   { to: '/tarefas', label: 'Tarefas', icon: <CheckSquare size={18} />, permission: 'tarefas' },
   { to: '/pdfs', label: 'PDFs', icon: <FileText size={18} />, permission: 'pdfs' },
   { to: '/repositorio', label: 'Repositório', icon: <Image size={18} />, permission: 'repositorio' },
-  { to: '/social-media', label: 'Social Media', icon: <Share2 size={18} />, permission: 'social_media' },
+  { to: '/social-media', label: 'Social Media', icon: <Share2 size={18} /> },
   { to: '/usuarios', label: 'Usuários', icon: <Users size={18} />, adminOnly: true },
 ]
 
