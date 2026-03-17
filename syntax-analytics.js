@@ -19,7 +19,8 @@
 
   // Configuração
   const SITE_ID = window.SYNTAX_SITE_ID;
-  const PROJECT_ID = window.SYNTAX_PROJECT_ID || 'YOUR_PROJECT_ID';
+  const PROJECT_ID = window.SYNTAX_PROJECT_ID || 'thcjrzluhsbgtbirdoxl';
+  const ANON_KEY = window.SYNTAX_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRoY2pyemx1aHNiZ3RiaXJkb3hsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTM1MjcsImV4cCI6MjA4ODkyOTUyN30.DdhrLvq1G0b0MrPkMBr4jP0pkzzM1JVsUBnR9V7s8dU';
   const API_URL = `https://${PROJECT_ID}.supabase.co/functions/v1/make-server-cee56a32`;
 
   if (!SITE_ID) {
@@ -38,21 +39,21 @@
       ...eventData
     };
 
-    // Usar sendBeacon se disponível (melhor para page unload)
-    if (navigator.sendBeacon) {
-      const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-      navigator.sendBeacon(`${API_URL}/track`, blob);
-    } else {
-      // Fallback para fetch
-      fetch(`${API_URL}/track`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-        keepalive: true
-      }).catch(err => console.error('Syntax Analytics error:', err));
-    }
+    const authHeaders = {
+      'Authorization': `Bearer ${ANON_KEY}`,
+      'apikey': ANON_KEY,
+    };
+
+    // Usar fetch com keepalive (sendBeacon não suporta headers customizados)
+    fetch(`${API_URL}/track`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
+      body: JSON.stringify(data),
+      keepalive: true
+    }).catch(err => console.error('Syntax Analytics error:', err));
   }
 
   // Track pageview automaticamente
