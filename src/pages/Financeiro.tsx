@@ -135,31 +135,31 @@ function EntryModal({ entry, onClose, onSaved }: {
 
           <div>
             <label className="block text-xs font-medium text-zinc-300 mb-1">Descrição *</label>
-            <input value={form.description} onChange={e => set('description', e.target.value)} required placeholder="Ex: Serviço de desenvolvimento" className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            <input value={form.description} onChange={e => set('description', e.target.value)} required placeholder="Ex: Serviço de desenvolvimento" className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">Valor (R$) *</label>
-              <input value={form.amount} onChange={e => set('amount', e.target.value)} required type="number" min="0" step="0.01" placeholder="0,00" className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              <input value={form.amount} onChange={e => set('amount', e.target.value)} required type="number" min="0" step="0.01" placeholder="0,00" className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">Vencimento *</label>
-              <input value={form.dueDate} onChange={e => set('dueDate', e.target.value)} required type="date" className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              <input value={form.dueDate} onChange={e => set('dueDate', e.target.value)} required type="date" className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">Categoria</label>
-              <select value={form.category} onChange={e => set('category', e.target.value)} className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-zinc-900">
+              <select value={form.category} onChange={e => set('category', e.target.value)} className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm text-zinc-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-zinc-900">
                 <option value="">Selecionar...</option>
                 {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">Recorrência</label>
-              <select value={form.recurrence} onChange={e => set('recurrence', e.target.value)} className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-zinc-900">
+              <select value={form.recurrence} onChange={e => set('recurrence', e.target.value)} className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm text-zinc-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-zinc-900">
                 {RECURRENCES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
             </div>
@@ -167,12 +167,12 @@ function EntryModal({ entry, onClose, onSaved }: {
 
           <div>
             <label className="block text-xs font-medium text-zinc-300 mb-1">Cliente / Fornecedor</label>
-            <input value={form.clientOrSupplier} onChange={e => set('clientOrSupplier', e.target.value)} placeholder="Nome" className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            <input value={form.clientOrSupplier} onChange={e => set('clientOrSupplier', e.target.value)} placeholder="Nome" className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-zinc-300 mb-1">Observações</label>
-            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Notas adicionais..." rows={2} className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none" />
+            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Notas adicionais..." rows={2} className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none" />
           </div>
 
           <div className="flex gap-3 pt-1">

@@ -20,12 +20,311 @@ import {
   User,
   Clock,
   AlertCircle,
+  Sparkles,
+  Upload,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { crmApi } from '../lib/api'
 import type { Lead, Folder } from '../lib/api'
+import { supabase, SUPABASE_ANON_KEY } from '../lib/supabase'
+
+// ─── WhatsApp helpers ─────────────────────────────────────────────────────────
+
+function WhatsAppIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    </svg>
+  )
+}
+
+function whatsappUrl(phone?: string | null): string | null {
+  if (!phone) return null
+  const digits = phone.replace(/\D/g, '')
+  if (!digits) return null
+  const full = digits.startsWith('55') ? digits : `55${digits}`
+  return `https://wa.me/${full}`
+}
+
+// ─── AI extraction helpers ────────────────────────────────────────────────────
+
+const EXTRACT_URL = 'https://thcjrzluhsbgtbirdoxl.supabase.co/functions/v1/extract-leads'
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve((reader.result as string).split(',')[1])
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+interface ExtractedLead {
+  name: string
+  phone?: string
+  email?: string
+  company?: string
+  service?: string
+  notes?: string
+}
+
+// ─── Import AI Modal ──────────────────────────────────────────────────────────
+
+function ImportAIModal({ folders, onClose, onImported }: {
+  folders: Folder[]
+  onClose: () => void
+  onImported: (leads: Lead[]) => void
+}) {
+  const [tab, setTab] = useState<'text' | 'image'>('text')
+  const [textInput, setTextInput] = useState('')
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [processing, setProcessing] = useState(false)
+  const [extracted, setExtracted] = useState<ExtractedLead[]>([])
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [importing, setImporting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const switchTab = (t: 'text' | 'image') => { setTab(t); setExtracted([]); setError(null) }
+
+  const setImageFromFile = (f: File) => {
+    if (!f.type.startsWith('image/')) { toast.error('Apenas imagens'); return }
+    setImageFile(f)
+    if (imagePreview) URL.revokeObjectURL(imagePreview)
+    setImagePreview(URL.createObjectURL(f))
+  }
+
+  const handleExtract = async () => {
+    setProcessing(true); setError(null); setExtracted([])
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      let body: object
+      if (tab === 'text') {
+        if (!textInput.trim()) { toast.error('Cole algum texto'); return }
+        body = { type: 'text', content: textInput }
+      } else {
+        if (!imageFile) { toast.error('Selecione uma imagem'); return }
+        const base64 = await fileToBase64(imageFile)
+        body = { type: 'image', base64, mimeType: imageFile.type }
+      }
+
+      const res = await fetch(EXTRACT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(body),
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao processar')
+
+      const leads: ExtractedLead[] = data.leads || []
+      setExtracted(leads)
+      setSelected(new Set(leads.map((_: ExtractedLead, i: number) => i)))
+      if (leads.length === 0) toast.info('Nenhum lead identificado. Tente com mais detalhes.')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro ao processar')
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const toggleAll = () => {
+    setSelected(prev => prev.size === extracted.length ? new Set() : new Set(extracted.map((_, i) => i)))
+  }
+
+  const toggleOne = (i: number) => {
+    setSelected(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n })
+  }
+
+  const handleImport = async () => {
+    const toImport = extracted.filter((_, i) => selected.has(i))
+    if (!toImport.length) return
+    setImporting(true)
+    try {
+      const created: Lead[] = []
+      for (const l of toImport) {
+        const lead = await crmApi.createLead({
+          name: l.name,
+          email: l.email || `${l.name.toLowerCase().replace(/\s+/g, '.')}@importado.com`,
+          phone: l.phone || undefined,
+          company: l.company || undefined,
+          service: l.service || undefined,
+          notes: l.notes || undefined,
+          stage: 'novo',
+          source: 'IA',
+        }) as Lead
+        created.push(lead)
+      }
+      toast.success(`${created.length} lead${created.length > 1 ? 's' : ''} importado${created.length > 1 ? 's' : ''}!`)
+      onImported(created)
+      onClose()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao importar')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-zinc-900 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-zinc-800 shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-zinc-800">
+          <div className="flex items-center gap-2">
+            <Sparkles size={18} className="text-emerald-500" />
+            <div>
+              <h2 className="font-semibold text-zinc-50">Importar Leads com IA</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">Cole uma lista ou envie um print — a IA extrai os dados automaticamente</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"><X size={18} /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {/* Tabs */}
+          <div className="flex bg-zinc-800 rounded-xl p-1 gap-1">
+            {(['text', 'image'] as const).map(t => (
+              <button key={t} onClick={() => switchTab(t)}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${tab === t ? 'bg-zinc-700 text-zinc-50 shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>
+                {t === 'text' ? 'Colar Texto' : 'Enviar Imagem / Print'}
+              </button>
+            ))}
+          </div>
+
+          {/* Input area */}
+          {tab === 'text' ? (
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-2">
+                Cole aqui sua lista (texto livre, CSV, tabela, qualquer formato)
+              </label>
+              <textarea
+                value={textInput}
+                onChange={e => setTextInput(e.target.value)}
+                placeholder={`Exemplos:\nJoão Silva - (11) 99999-0001 - joao@email.com\nMaria Santos, Acme, 11988887777, Website\nNome: Pedro | Tel: 21987654321 | Serviço: E-commerce`}
+                rows={7}
+                className="w-full px-3 py-2.5 border border-zinc-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none font-mono bg-zinc-950 text-zinc-200 placeholder-zinc-700"
+              />
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-2">
+                Envie um print, foto ou screenshot com os contatos
+              </label>
+              <div
+                onClick={() => fileRef.current?.click()}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setImageFromFile(f) }}
+                className="border-2 border-dashed border-zinc-700 hover:border-emerald-600 rounded-xl p-6 text-center cursor-pointer transition"
+              >
+                <input ref={fileRef} type="file" accept="image/*" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) setImageFromFile(f) }} />
+                {imagePreview ? (
+                  <img src={imagePreview} alt="Preview" className="max-h-48 mx-auto rounded-lg object-contain" />
+                ) : (
+                  <>
+                    <Upload size={24} className="mx-auto text-zinc-500 mb-2" />
+                    <p className="text-sm text-zinc-400">Clique ou arraste um print/foto</p>
+                    <p className="text-xs text-zinc-600 mt-1">PNG, JPG, WebP</p>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm rounded-xl p-3 flex items-start gap-2">
+              <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Extracted leads */}
+          {extracted.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold text-zinc-200">
+                  {extracted.length} lead{extracted.length > 1 ? 's' : ''} identificado{extracted.length > 1 ? 's' : ''}
+                </p>
+                <button onClick={toggleAll} className="text-xs text-emerald-500 hover:text-emerald-400 transition">
+                  {selected.size === extracted.length ? 'Desmarcar todos' : 'Selecionar todos'}
+                </button>
+              </div>
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {extracted.map((lead, i) => (
+                  <div
+                    key={i}
+                    onClick={() => toggleOne(i)}
+                    className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition ${
+                      selected.has(i) ? 'border-emerald-600/40 bg-emerald-500/5' : 'border-zinc-700 bg-zinc-800/50 opacity-50'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 mt-0.5 rounded flex-shrink-0 border flex items-center justify-center ${selected.has(i) ? 'bg-emerald-600 border-emerald-600' : 'border-zinc-600'}`}>
+                      {selected.has(i) && <span className="text-white text-[9px] font-bold leading-none">✓</span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-zinc-100">{lead.name}</p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                        {lead.phone && <span className="text-xs text-zinc-400 flex items-center gap-1"><Phone size={10}/>{lead.phone}</span>}
+                        {lead.email && <span className="text-xs text-zinc-400 flex items-center gap-1"><Mail size={10}/>{lead.email}</span>}
+                        {lead.company && <span className="text-xs text-zinc-500">{lead.company}</span>}
+                        {lead.service && <span className="text-xs text-emerald-500/80">{lead.service}</span>}
+                      </div>
+                      {lead.notes && <p className="text-xs text-zinc-600 mt-0.5 truncate">{lead.notes}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 border-t border-zinc-800 flex gap-3">
+          <button onClick={onClose} className="px-4 py-2 border border-zinc-700 text-zinc-300 text-sm rounded-lg hover:bg-zinc-950 transition">
+            Cancelar
+          </button>
+          {extracted.length === 0 ? (
+            <button
+              onClick={handleExtract}
+              disabled={processing || (tab === 'text' ? !textInput.trim() : !imageFile)}
+              className="flex-1 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              {processing ? <><Loader2 size={14} className="animate-spin" />Analisando...</> : <><Sparkles size={14} />Processar com IA</>}
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={handleExtract}
+                disabled={processing}
+                className="px-4 py-2 border border-zinc-600 text-zinc-300 text-sm rounded-lg hover:bg-zinc-800 transition flex items-center gap-2 disabled:opacity-60"
+              >
+                {processing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                Reprocessar
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={importing || selected.size === 0}
+                className="flex-1 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {importing ? <><Loader2 size={14} className="animate-spin" />Importando...</> : <>Importar {selected.size} lead{selected.size > 1 ? 's' : ''}</>}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const STAGES: { key: Lead['stage']; label: string; color: string; bg: string }[] = [
   { key: 'novo', label: 'Novo', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
@@ -150,66 +449,66 @@ function LeadModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">Nome *</label>
-              <input value={form.name} onChange={e => set('name', e.target.value)} required placeholder="Nome do lead" className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              <input value={form.name} onChange={e => set('name', e.target.value)} required placeholder="Nome do lead" className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">E-mail *</label>
-              <input value={form.email} onChange={e => set('email', e.target.value)} required type="email" placeholder="email@empresa.com" className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              <input value={form.email} onChange={e => set('email', e.target.value)} required type="email" placeholder="email@empresa.com" className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">Empresa</label>
-              <input value={form.company} onChange={e => set('company', e.target.value)} placeholder="Nome da empresa" className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              <input value={form.company} onChange={e => set('company', e.target.value)} placeholder="Nome da empresa" className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">Telefone</label>
-              <input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="(11) 99999-9999" className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              <input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="(11) 99999-9999" className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">Website</label>
-              <input value={form.website} onChange={e => set('website', e.target.value)} placeholder="https://empresa.com.br" className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              <input value={form.website} onChange={e => set('website', e.target.value)} placeholder="https://empresa.com.br" className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">Orçamento (R$)</label>
-              <input value={form.budget} onChange={e => set('budget', e.target.value)} type="number" min="0" placeholder="0,00" className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              <input value={form.budget} onChange={e => set('budget', e.target.value)} type="number" min="0" placeholder="0,00" className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">Serviço</label>
-              <select value={form.service} onChange={e => set('service', e.target.value)} className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-zinc-900">
+              <select value={form.service} onChange={e => set('service', e.target.value)} className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm text-zinc-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-zinc-900">
                 <option value="">Selecionar...</option>
                 {SERVICES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">Origem</label>
-              <select value={form.source} onChange={e => set('source', e.target.value)} className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-zinc-900">
+              <select value={form.source} onChange={e => set('source', e.target.value)} className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm text-zinc-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-zinc-900">
                 <option value="">Selecionar...</option>
                 {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">Prioridade</label>
-              <select value={form.priority} onChange={e => set('priority', e.target.value)} className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-zinc-900">
+              <select value={form.priority} onChange={e => set('priority', e.target.value)} className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm text-zinc-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-zinc-900">
                 {PRIORITIES.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">Estágio</label>
-              <select value={form.stage} onChange={e => set('stage', e.target.value)} className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-zinc-900">
+              <select value={form.stage} onChange={e => set('stage', e.target.value)} className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm text-zinc-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-zinc-900">
                 {STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">Responsável</label>
-              <input value={form.responsible} onChange={e => set('responsible', e.target.value)} placeholder="Nome do responsável" className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              <input value={form.responsible} onChange={e => set('responsible', e.target.value)} placeholder="Nome do responsável" className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">Próximo Follow-up</label>
-              <input value={form.nextFollowUp} onChange={e => set('nextFollowUp', e.target.value)} type="date" className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              <input value={form.nextFollowUp} onChange={e => set('nextFollowUp', e.target.value)} type="date" className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
             </div>
             {folders.length > 0 && (
               <div>
                 <label className="block text-xs font-medium text-zinc-300 mb-1">Pasta</label>
-                <select value={form.folderId} onChange={e => set('folderId', e.target.value)} className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-zinc-900">
+                <select value={form.folderId} onChange={e => set('folderId', e.target.value)} className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm text-zinc-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-zinc-900">
                   <option value="">Sem pasta</option>
                   {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
@@ -217,7 +516,7 @@ function LeadModal({
             )}
             <div className="col-span-2">
               <label className="block text-xs font-medium text-zinc-300 mb-1">Observações</label>
-              <textarea value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Anotações sobre o lead..." rows={3} className="w-full px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none" />
+              <textarea value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Anotações sobre o lead..." rows={3} className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none" />
             </div>
           </div>
         </form>
@@ -429,7 +728,7 @@ function LeadPanel({ lead, folders, onClose, onUpdated, onDeleted }: {
                 onChange={e => setActivityNote(e.target.value)}
                 placeholder="Adicionar nota de atividade..."
                 rows={2}
-                className="flex-1 px-3 py-2 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+                className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
               />
               <button
                 onClick={handleAddNote}
@@ -472,6 +771,7 @@ export default function CRM() {
   const [search, setSearch] = useState('')
   const [activeFolder, setActiveFolder] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [showImportAI, setShowImportAI] = useState(false)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban')
   const [newFolderName, setNewFolderName] = useState('')
@@ -588,6 +888,13 @@ export default function CRM() {
             <button onClick={() => setViewMode('kanban')} className={`px-3 py-2 text-xs font-medium transition ${viewMode === 'kanban' ? 'bg-emerald-600 text-white' : 'text-zinc-300 hover:bg-zinc-950'}`}>Kanban</button>
             <button onClick={() => setViewMode('table')} className={`px-3 py-2 text-xs font-medium transition ${viewMode === 'table' ? 'bg-emerald-600 text-white' : 'text-zinc-300 hover:bg-zinc-950'}`}>Tabela</button>
           </div>
+          <button
+            onClick={() => setShowImportAI(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-zinc-800 border border-zinc-700 text-zinc-200 text-sm font-semibold rounded-lg hover:bg-zinc-700 transition shadow-sm"
+          >
+            <Sparkles size={15} className="text-emerald-400" />
+            Importar com IA
+          </button>
           <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition shadow-sm">
             <Plus size={16} />Novo Lead
           </button>
@@ -611,24 +918,37 @@ export default function CRM() {
                     </div>
                     <div className="flex-1 overflow-y-auto space-y-2.5 pb-4">
                       {stageLeads.map(lead => (
-                        <button
+                        <div
                           key={lead.id}
-                          onClick={() => setSelectedLead(lead)}
                           className="w-full text-left bg-zinc-900 rounded-xl border border-zinc-800 p-3.5 shadow-sm hover:shadow-md hover:border-emerald-700 transition-all duration-150"
                         >
-                          <p className="text-sm font-semibold text-zinc-50 mb-1">{lead.name}</p>
-                          {lead.company && <p className="text-xs text-zinc-500 mb-2">{lead.company}</p>}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {lead.priority && <PriorityBadge priority={lead.priority} />}
-                            {lead.budget != null && <span className="text-xs text-zinc-400">{formatCurrency(lead.budget)}</span>}
-                          </div>
-                          {lead.nextFollowUp && (
-                            <div className="flex items-center gap-1 mt-2 text-xs text-zinc-500">
-                              <Clock size={10} />
-                              <span>{formatDate(lead.nextFollowUp)}</span>
+                          <button className="w-full text-left" onClick={() => setSelectedLead(lead)}>
+                            <p className="text-sm font-semibold text-zinc-50 mb-1">{lead.name}</p>
+                            {lead.company && <p className="text-xs text-zinc-500 mb-2">{lead.company}</p>}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {lead.priority && <PriorityBadge priority={lead.priority} />}
+                              {lead.budget != null && <span className="text-xs text-zinc-400">{formatCurrency(lead.budget)}</span>}
                             </div>
+                            {lead.nextFollowUp && (
+                              <div className="flex items-center gap-1 mt-2 text-xs text-zinc-500">
+                                <Clock size={10} />
+                                <span>{formatDate(lead.nextFollowUp)}</span>
+                              </div>
+                            )}
+                          </button>
+                          {whatsappUrl(lead.phone) && (
+                            <a
+                              href={whatsappUrl(lead.phone)!}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              className="mt-2.5 flex items-center gap-1.5 text-xs text-[#25D366] hover:text-green-300 transition font-medium"
+                            >
+                              <WhatsAppIcon size={12} />
+                              Abrir WhatsApp
+                            </a>
                           )}
-                        </button>
+                        </div>
                       ))}
                       {stageLeads.length === 0 && (
                         <div className="text-center py-6 text-zinc-600 text-xs">Nenhum lead</div>
@@ -690,6 +1010,17 @@ export default function CRM() {
           folders={folders}
           onClose={() => setShowAdd(false)}
           onSaved={handleLeadSaved}
+        />
+      )}
+
+      {showImportAI && (
+        <ImportAIModal
+          folders={folders}
+          onClose={() => setShowImportAI(false)}
+          onImported={imported => {
+            setLeads(prev => [...imported, ...prev])
+            setShowImportAI(false)
+          }}
         />
       )}
 

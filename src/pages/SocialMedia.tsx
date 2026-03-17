@@ -11,6 +11,8 @@ import {
   X,
   Loader2,
   FileImage,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO, isBefore, startOfDay } from 'date-fns'
@@ -369,6 +371,162 @@ function EntregarModal({ request, onClose, onDelivered }: {
   )
 }
 
+// ─── Calendar View ────────────────────────────────────────────────────────────
+
+const PT_MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+const PT_DOW = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
+
+function CalendarView({ requests, delivered }: { requests: ArtRequest[]; delivered: DeliveredArtRow[] }) {
+  const [curDate, setCurDate] = useState(() => { const d = new Date(); d.setDate(1); return d })
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
+
+  const pendingMap: Record<string, ArtRequest[]> = {}
+  const deliveredMap: Record<string, DeliveredArtRow[]> = {}
+
+  requests.forEach(r => {
+    if (r.deadline) {
+      const key = r.deadline.split('T')[0]
+      if (!pendingMap[key]) pendingMap[key] = []
+      pendingMap[key].push(r)
+    }
+  })
+  delivered.forEach(a => {
+    if (a.createdAt) {
+      const key = a.createdAt.split('T')[0]
+      if (!deliveredMap[key]) deliveredMap[key] = []
+      deliveredMap[key].push(a)
+    }
+  })
+
+  const year = curDate.getFullYear()
+  const month = curDate.getMonth()
+  const firstDow = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const todayKey = new Date().toISOString().split('T')[0]
+
+  const selectedPending = selectedDay ? (pendingMap[selectedDay] || []) : []
+  const selectedDelivered = selectedDay ? (deliveredMap[selectedDay] || []) : []
+
+  const tableBg = { backgroundColor: '#1a1a1a' }
+
+  return (
+    <div className="space-y-4 max-w-2xl mx-auto">
+      <div className="rounded-2xl border border-white/[0.07] overflow-hidden" style={tableBg}>
+        {/* Month navigation */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.05]">
+          <button onClick={() => setCurDate(new Date(year, month - 1, 1))}
+            className="p-1.5 hover:bg-white/10 rounded-lg transition text-zinc-400"><ChevronLeft size={16} /></button>
+          <span className="text-sm font-semibold text-white">{PT_MONTHS[month]} {year}</span>
+          <button onClick={() => setCurDate(new Date(year, month + 1, 1))}
+            className="p-1.5 hover:bg-white/10 rounded-lg transition text-zinc-400"><ChevronRight size={16} /></button>
+        </div>
+
+        <div className="p-4">
+          {/* Day-of-week header */}
+          <div className="grid grid-cols-7 mb-1">
+            {PT_DOW.map(d => (
+              <div key={d} className="text-center text-xs font-medium text-zinc-600 py-1">{d}</div>
+            ))}
+          </div>
+
+          {/* Days grid */}
+          <div className="grid grid-cols-7 gap-0.5">
+            {Array.from({ length: firstDow }).map((_, i) => <div key={`e${i}`} />)}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const day = i + 1
+              const key = `${year}-${String(month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+              const hasPending = !!(pendingMap[key]?.length)
+              const hasDelivered = !!(deliveredMap[key]?.length)
+              const isToday = key === todayKey
+              const isSel = key === selectedDay
+              return (
+                <button
+                  key={day}
+                  onClick={() => setSelectedDay(p => p === key ? null : key)}
+                  className={`aspect-square flex flex-col items-center justify-center rounded-lg text-xs transition ${
+                    isSel ? 'bg-emerald-600/20 border border-emerald-500/50' :
+                    isToday ? 'bg-white/10 border border-white/20' :
+                    'hover:bg-white/5 border border-transparent'
+                  }`}
+                >
+                  <span className={isSel ? 'text-emerald-300 font-bold' : isToday ? 'text-white font-semibold' : 'text-zinc-300'}>
+                    {day}
+                  </span>
+                  {(hasPending || hasDelivered) && (
+                    <div className="flex gap-0.5 mt-0.5">
+                      {hasPending && <span className="w-1 h-1 rounded-full bg-amber-400" />}
+                      {hasDelivered && <span className="w-1 h-1 rounded-full bg-emerald-400" />}
+                    </div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div className="flex items-center gap-5 px-6 py-3 border-t border-white/[0.05]">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+            <span className="text-xs text-zinc-500">Prazo pendente</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+            <span className="text-xs text-zinc-500">Arte entregue</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Selected day details */}
+      {selectedDay && (
+        <div className="rounded-2xl border border-white/[0.07] p-5 space-y-4" style={tableBg}>
+          <p className="text-sm font-semibold text-white">{formatDate(selectedDay)}</p>
+
+          {selectedPending.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-amber-400 uppercase tracking-wide mb-2">Prazos Pendentes</p>
+              <div className="space-y-2">
+                {selectedPending.map(r => (
+                  <div key={r.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl" style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}>
+                    <div>
+                      <p className="text-sm text-white font-medium">{r.format}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">{r.client}</p>
+                    </div>
+                    <span className={`text-xs font-medium px-3 py-1 rounded-full border ${STATUS_COLORS[r.status] ?? ''}`}>
+                      {STATUS_LABELS[r.status] ?? r.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {selectedDelivered.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-emerald-400 uppercase tracking-wide mb-2">Entregas Realizadas</p>
+              <div className="space-y-2">
+                {selectedDelivered.map(a => (
+                  <div key={a.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl" style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}>
+                    <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm text-white font-medium">{a.requestTitle || a.title || '—'}</p>
+                      {a.client && <p className="text-xs text-zinc-500 mt-0.5">{a.client}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {selectedPending.length === 0 && selectedDelivered.length === 0 && (
+            <p className="text-zinc-600 text-sm text-center py-4">Nenhum item para este dia</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Table components ─────────────────────────────────────────────────────────
 
 const thCls = "text-left px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wide whitespace-nowrap"
@@ -383,6 +541,7 @@ export default function SocialMedia() {
   const [loadingArts, setLoadingArts] = useState(true)
   const [artUrls, setArtUrls] = useState<Record<string, string>>({})
 
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
   const [showNova, setShowNova] = useState(false)
   const [editingReq, setEditingReq] = useState<ArtRequest | null>(null)
   const [deliveringReq, setDeliveringReq] = useState<ArtRequest | null>(null)
@@ -452,12 +611,19 @@ export default function SocialMedia() {
             <p className="text-zinc-500 text-sm mt-0.5">Gerencie solicitações e entregas de artes</p>
           </div>
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white border border-white/15 transition hover:bg-white/10"
-              style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition ${viewMode === 'list' ? 'text-white border-white/15 hover:bg-white/10' : 'text-zinc-500 border-white/5 hover:bg-white/5'}`}
+              style={viewMode === 'list' ? { backgroundColor: 'rgba(255,255,255,0.1)' } : {}}
+            >
               <LayoutGrid size={14} />
               Lista
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-zinc-400 border border-white/10 transition hover:bg-white/5">
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition ${viewMode === 'calendar' ? 'text-white border-white/15 hover:bg-white/10' : 'text-zinc-500 border-white/5 hover:bg-white/5'}`}
+              style={viewMode === 'calendar' ? { backgroundColor: 'rgba(255,255,255,0.1)' } : {}}
+            >
               <CalendarDays size={14} />
               Calendário
             </button>
@@ -470,6 +636,14 @@ export default function SocialMedia() {
             </button>
           </div>
         </div>
+
+        {/* ── Calendar View ── */}
+        {viewMode === 'calendar' && (
+          <CalendarView requests={requests} delivered={deliveredArts} />
+        )}
+
+        {/* ── List View ── */}
+        {viewMode === 'list' && <>
 
         {/* ── Artes Solicitadas ── */}
         <section>
@@ -656,6 +830,8 @@ export default function SocialMedia() {
             )}
           </div>
         </section>
+
+        </>}
 
       </div>
 
