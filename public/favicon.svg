@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Upper right-pointing chevron -->
+  <polygon points="5,5 22,5 22,26 5,26"       fill="#0a3010"/>
+  <polygon points="22,5 42,5 42,26 22,26"      fill="#165018"/>
+  <polygon points="42,5 68,26 42,26"           fill="#28882e"/>
+  <polygon points="42,26 68,26 42,47 22,47"    fill="#52cc2c"/>
+  <!-- Lower left-pointing chevron -->
+  <polygon points="95,53 78,53 78,74 95,74"    fill="#0a3010"/>
+  <polygon points="78,53 58,53 58,74 78,74"    fill="#165018"/>
+  <polygon points="58,53 32,74 58,74"          fill="#28882e"/>
+  <polygon points="58,74 32,74 58,95 78,95"    fill="#52cc2c"/>
+</svg>
