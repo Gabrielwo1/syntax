@@ -192,7 +192,7 @@ function QuotePreview({ quote }: { quote: Quote }) {
           <p className="text-zinc-500 text-xs uppercase tracking-widest mb-2 print:text-zinc-500">PAGAMENTO</p>
           <div className="flex items-center gap-2 text-sm text-zinc-200 print:text-zinc-800">
             <CreditCard className="w-4 h-4 text-zinc-500" />
-            <span>{PAYMENT_OPTIONS.find(o => o.value === quote.paymentTerms)?.label ?? quote.paymentTerms || '—'}</span>
+            <span>{(PAYMENT_OPTIONS.find(o => o.value === quote.paymentTerms)?.label ?? quote.paymentTerms) || '—'}</span>
           </div>
         </div>
       </div>
