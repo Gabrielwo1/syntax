@@ -8,22 +8,17 @@ import { authApi } from '../lib/api'
 // Syntax S logo
 function SyntaxLogo() {
   return (
-    <svg width="52" height="52" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="lgl1" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#14532d" />
-          <stop offset="50%" stopColor="#16a34a" />
-          <stop offset="100%" stopColor="#22c55e" />
-        </linearGradient>
-        <linearGradient id="lgl2" x1="36" y1="0" x2="0" y2="36" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#166534" />
-          <stop offset="100%" stopColor="#15803d" />
-        </linearGradient>
-      </defs>
-      <rect width="36" height="36" rx="9" fill="#0a0a0a" />
-      <polygon points="5,5 22,5 31,11 22,17 10,17 10,11" fill="url(#lgl1)" opacity="0.95" />
-      <polygon points="14,19 26,19 31,25 26,31 5,31 14,25" fill="url(#lgl2)" opacity="1" />
-      <polygon points="10,17 22,17 26,19 14,19" fill="#16a34a" opacity="0.8" />
+    <svg width="52" height="52" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Upper right-pointing chevron */}
+      <polygon points="5,5 22,5 22,26 5,26"       fill="#0a3010" />
+      <polygon points="22,5 42,5 42,26 22,26"      fill="#165018" />
+      <polygon points="42,5 68,26 42,26"           fill="#28882e" />
+      <polygon points="42,26 68,26 42,47 22,47"    fill="#52cc2c" />
+      {/* Lower left-pointing chevron */}
+      <polygon points="95,53 78,53 78,74 95,74"    fill="#0a3010" />
+      <polygon points="78,53 58,53 58,74 78,74"    fill="#165018" />
+      <polygon points="58,53 32,74 58,74"          fill="#28882e" />
+      <polygon points="58,74 32,74 58,95 78,95"    fill="#52cc2c" />
     </svg>
   )
 }
