@@ -43,6 +43,7 @@ import PDFs from './pages/PDFs'
 import Repository from './pages/Repository'
 import Users from './pages/Users'
 import SocialMedia from './pages/SocialMedia'
+import Quotes from './pages/Quotes'
 
 function LoadingSpinner() {
   return (
@@ -145,6 +146,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <SocialMedia />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/orcamento"
+        element={
+          <ProtectedRoute>
+            <Quotes />
           </ProtectedRoute>
         }
       />
