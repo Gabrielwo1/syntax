@@ -20,6 +20,22 @@
     color: #1e293b;
   }
 
+  input,
+  textarea,
+  select {
+    color: #f9fafb;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #52525b;
+  }
+
+  option {
+    color: #f9fafb;
+    background-color: #18181b;
+  }
+
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
