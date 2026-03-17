@@ -23,15 +23,20 @@ function SyntaxLogo() {
   )
 }
 
+const REMEMBER_KEY = 'syntax_remember'
+
 export default function Login() {
   const { login, initialized, refreshUser } = useAuth()
   const navigate = useNavigate()
 
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const saved = (() => { try { return JSON.parse(localStorage.getItem(REMEMBER_KEY) || 'null') } catch { return null } })()
+
+  const [email, setEmail] = useState(saved?.email || '')
+  const [password, setPassword] = useState(saved?.password || '')
   const [name, setName] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [remember, setRemember] = useState(!!saved)
 
   const isSetup = initialized === false
 
@@ -48,6 +53,11 @@ export default function Login() {
         navigate('/')
       } else {
         await login(email, password)
+        if (remember) {
+          localStorage.setItem(REMEMBER_KEY, JSON.stringify({ email, password }))
+        } else {
+          localStorage.removeItem(REMEMBER_KEY)
+        }
         navigate('/')
       }
     } catch (err: unknown) {
@@ -152,6 +162,18 @@ export default function Login() {
                 </button>
               </div>
             </div>
+
+            {!isSetup && (
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={e => setRemember(e.target.checked)}
+                  className="w-4 h-4 rounded border-zinc-700 bg-zinc-950 accent-emerald-500 cursor-pointer"
+                />
+                <span className="text-xs text-zinc-400">Salvar informações de login</span>
+              </label>
+            )}
 
             <button
               type="submit"
