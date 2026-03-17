@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import {
   Plus, X, Printer, ArrowLeft, ChevronDown,
   FileText, Clock, CheckCircle2, XCircle, Send,
@@ -7,7 +7,8 @@ import {
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { MOCK_QUOTES } from '../data/mockData'
+import { toast } from 'sonner'
+import { quotesApi } from '../lib/api'
 import type { Quote, QuoteItem, QuoteStatus } from '../data/mockData'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -221,10 +222,11 @@ function QuotePreview({ quote }: { quote: Quote }) {
 
 // ─── Quote Editor ─────────────────────────────────────────────────────────────
 
-function QuoteEditor({ quote, onBack, onSave }: {
+function QuoteEditor({ quote, onBack, onSave, onDelete }: {
   quote: Quote
   onBack: () => void
   onSave: (q: Quote) => void
+  onDelete: () => void
 }) {
   const [form, setForm] = useState<Quote>({ ...quote })
   const set = <K extends keyof Quote>(k: K, v: Quote[K]) => setForm(f => ({ ...f, [k]: v }))
@@ -254,7 +256,7 @@ function QuoteEditor({ quote, onBack, onSave }: {
 
   const handleSave = () => {
     onSave(form)
-    onBack()
+    // parent calls setEditingQuote(null) after async save succeeds
   }
 
   const inputCls = "w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
@@ -271,6 +273,12 @@ function QuoteEditor({ quote, onBack, onSave }: {
         </button>
         <div className="flex items-center gap-2">
           <StatusBadge status={form.status} />
+          <button
+            onClick={() => { if (confirm('Excluir este orçamento?')) onDelete() }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800 text-zinc-400 border border-zinc-700 hover:border-rose-500/50 hover:text-rose-400 rounded-2xl transition-all font-medium text-sm"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
           <button
             onClick={() => window.print()}
             className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800 text-zinc-300 border border-zinc-700 hover:border-zinc-600 hover:text-zinc-50 rounded-2xl transition-all font-medium text-sm"
@@ -467,38 +475,76 @@ function QuoteEditor({ quote, onBack, onSave }: {
 // ─── Quote List ────────────────────────────────────────────────────────────────
 
 export default function Quotes() {
-  const [quotes, setQuotes] = useState<Quote[]>(MOCK_QUOTES)
+  const [quotes, setQuotes] = useState<Quote[]>([])
+  const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState<QuoteStatus | 'all'>('all')
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null)
+
+  useEffect(() => {
+    quotesApi.list()
+      .then(({ quotes: qs }) => setQuotes(qs as Quote[]))
+      .catch(() => toast.error('Erro ao carregar orçamentos'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const handleNew = async () => {
+    const q = {
+      number: nextQuoteNumber(quotes),
+      client: '',
+      clientEmail: '',
+      clientPhone: '',
+      validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      deliveryDays: 15,
+      paymentTerms: '50%+50%',
+      notes: '',
+      items: [],
+      discount: 0,
+      status: 'draft' as QuoteStatus,
+      createdAt: new Date().toISOString(),
+    }
+    try {
+      const { quote } = await quotesApi.create(q)
+      const newQ = quote as Quote
+      setQuotes(prev => [newQ, ...prev])
+      setEditingQuote(newQ)
+    } catch {
+      toast.error('Erro ao criar orçamento')
+    }
+  }
+
+  const handleSave = async (updated: Quote) => {
+    try {
+      const { quote } = await quotesApi.update(updated.id, updated as any)
+      const saved = quote as Quote
+      setQuotes(prev => prev.map(q => q.id === saved.id ? saved : q))
+      setEditingQuote(null)
+      toast.success('Orçamento salvo')
+    } catch {
+      toast.error('Erro ao salvar orçamento')
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      await quotesApi.delete(id)
+      setQuotes(prev => prev.filter(q => q.id !== id))
+      setEditingQuote(null)
+      toast.success('Orçamento excluído')
+    } catch {
+      toast.error('Erro ao excluir orçamento')
+    }
+  }
 
   if (editingQuote) {
     return (
       <QuoteEditor
         quote={editingQuote}
         onBack={() => setEditingQuote(null)}
-        onSave={updated => {
-          setQuotes(prev => prev.map(q => q.id === updated.id ? updated : q))
-          setEditingQuote(null)
-        }}
+        onSave={handleSave}
+        onDelete={() => handleDelete(editingQuote.id)}
       />
     )
   }
-
-  const newQuote = (): Quote => ({
-    id: Date.now().toString(),
-    number: nextQuoteNumber(quotes),
-    client: '',
-    clientEmail: '',
-    clientPhone: '',
-    validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    deliveryDays: 15,
-    paymentTerms: '50%+50%',
-    notes: '',
-    items: [],
-    discount: 0,
-    status: 'draft',
-    createdAt: new Date().toISOString(),
-  })
 
   const filtered = filterStatus === 'all' ? quotes : quotes.filter(q => q.status === filterStatus)
 
@@ -519,7 +565,7 @@ export default function Quotes() {
             <p className="text-sm font-medium text-zinc-400 mt-1">Gerencie e envie propostas comerciais</p>
           </div>
           <button
-            onClick={() => { const q = newQuote(); setQuotes(prev => [q, ...prev]); setEditingQuote(q) }}
+            onClick={handleNew}
             className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-2xl hover:bg-emerald-700 transition-colors font-medium shadow-lg shadow-emerald-900/20"
           >
             <Plus className="w-4 h-4" /> Novo Orçamento
@@ -527,7 +573,13 @@ export default function Quotes() {
         </div>
       </div>
 
-      <div className="px-8 py-6 space-y-6">
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+        </div>
+      )}
+
+      {!loading && <div className="px-8 py-6 space-y-6">
         {/* Metric cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
@@ -628,7 +680,7 @@ export default function Quotes() {
             </table>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Print styles */}
       <style>{`

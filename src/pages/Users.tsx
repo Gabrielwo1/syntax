@@ -23,6 +23,8 @@ const PERMISSION_LIST = [
   { key: 'tarefas', label: 'Tarefas' },
   { key: 'pdfs', label: 'PDFs' },
   { key: 'repositorio', label: 'Repositório' },
+  { key: 'social-media', label: 'Social Media' },
+  { key: 'orcamento', label: 'Orçamentos' },
 ]
 
 interface UserFormData {

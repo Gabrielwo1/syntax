@@ -437,3 +437,24 @@ export const socialApi = {
   deleteArt: (id: string) =>
     apiFetch(`/social/arts/${id}`, { method: 'DELETE' }),
 }
+
+// ── Quotes ────────────────────────────────────────────────────────────────────
+
+export const quotesApi = {
+  list: () => apiFetch<{ quotes: any[] }>('/quotes'),
+
+  create: (data: Record<string, unknown>) =>
+    apiFetch<{ quote: any }>('/quotes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: Record<string, unknown>) =>
+    apiFetch<{ quote: any }>(`/quotes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) =>
+    apiFetch(`/quotes/${id}`, { method: 'DELETE' }),
+}
