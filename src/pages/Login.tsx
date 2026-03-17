@@ -5,23 +5,6 @@ import { toast } from 'sonner'
 import { useAuth } from '../contexts/AuthContext'
 import { authApi } from '../lib/api'
 
-// Syntax S logo
-function SyntaxLogo() {
-  return (
-    <svg width="52" height="52" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Upper right-pointing chevron */}
-      <polygon points="5,5 22,5 22,26 5,26"       fill="#0a3010" />
-      <polygon points="22,5 42,5 42,26 22,26"      fill="#165018" />
-      <polygon points="42,5 68,26 42,26"           fill="#28882e" />
-      <polygon points="42,26 68,26 42,47 22,47"    fill="#52cc2c" />
-      {/* Lower left-pointing chevron */}
-      <polygon points="95,53 78,53 78,74 95,74"    fill="#0a3010" />
-      <polygon points="78,53 58,53 58,74 78,74"    fill="#165018" />
-      <polygon points="58,53 32,74 58,74"          fill="#28882e" />
-      <polygon points="58,74 32,74 58,95 78,95"    fill="#52cc2c" />
-    </svg>
-  )
-}
 
 const REMEMBER_KEY = 'syntax_remember'
 
@@ -85,10 +68,7 @@ export default function Login() {
       <div className="relative w-full max-w-sm">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="mb-5 p-3 bg-zinc-900 rounded-2xl border border-zinc-800 shadow-2xl shadow-black/40">
-            <SyntaxLogo />
-          </div>
-          <h1 className="text-3xl font-black text-zinc-50 tracking-widest uppercase">SYNTAX</h1>
+          <img src="/logo-syntax.png" alt="Syntax" className="h-14 w-auto mb-2" />
           <p className="text-zinc-500 text-sm mt-1 font-medium">Plataforma de Gestão</p>
         </div>
 

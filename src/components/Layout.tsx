@@ -40,25 +40,6 @@ const navItems: NavItem[] = [
   { to: '/usuarios', label: 'Usuários', icon: <Users size={18} />, adminOnly: true },
 ]
 
-// ─── Syntax Logo SVG ──────────────────────────────────────────────────────────
-// Recreated from brand image: two opposing chevrons (angular S shape)
-// with 4 green facets each — deep shadow → bright lime
-function SyntaxLogo({ size = 36 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Upper right-pointing chevron */}
-      <polygon points="5,5 22,5 22,26 5,26"       fill="#0a3010" />
-      <polygon points="22,5 42,5 42,26 22,26"      fill="#165018" />
-      <polygon points="42,5 68,26 42,26"           fill="#28882e" />
-      <polygon points="42,26 68,26 42,47 22,47"    fill="#52cc2c" />
-      {/* Lower left-pointing chevron */}
-      <polygon points="95,53 78,53 78,74 95,74"    fill="#0a3010" />
-      <polygon points="78,53 58,53 58,74 78,74"    fill="#165018" />
-      <polygon points="58,53 32,74 58,74"          fill="#28882e" />
-      <polygon points="58,74 32,74 58,95 78,95"    fill="#52cc2c" />
-    </svg>
-  )
-}
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, isAdmin, permissions, logout } = useAuth()
@@ -94,13 +75,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex flex-col h-full">
       {/* Logo header */}
       <div className="px-5 py-5 border-b border-zinc-800">
-        <div className="flex items-center gap-3">
-          <SyntaxLogo size={36} />
-          <div>
-            <p className="text-white font-bold text-base tracking-widest uppercase">Syntax</p>
-            <p className="text-zinc-500 text-xs">Plataforma de Gestão</p>
-          </div>
-        </div>
+        <img src="/logo-syntax.png" alt="Syntax" className="h-8 w-auto" />
       </div>
 
       {/* Navigation */}
@@ -181,10 +156,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <button onClick={() => setMobileOpen(true)} className="p-2 rounded-xl text-zinc-400 hover:bg-zinc-800">
             <Menu size={20} />
           </button>
-          <div className="flex items-center gap-2">
-            <SyntaxLogo size={28} />
-            <span className="font-bold text-zinc-50 tracking-widest uppercase text-sm">Syntax</span>
-          </div>
+          <img src="/logo-syntax.png" alt="Syntax" className="h-7 w-auto" />
         </header>
 
         {/* Page content */}
