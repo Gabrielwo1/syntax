@@ -285,7 +285,7 @@ export default function Repository() {
   const [showUpload, setShowUpload] = useState(false)
   const [viewItem, setViewItem] = useState<RepoItem | null>(null)
   const [search, setSearch] = useState('')
-  const [tagFilter, setTagFilter] = useState('')
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     repoApi.list()
@@ -297,14 +297,33 @@ export default function Repository() {
   const allTags = Array.from(new Set(items.flatMap(i => i.tags || [])))
 
   const filtered = items.filter(item => {
-    if (tagFilter && !(item.tags || []).includes(tagFilter)) return false
-    if (search) {
-      const q = search.toLowerCase()
-      return (item.title || '').toLowerCase().includes(q) ||
-        (item.tags || []).some(t => t.toLowerCase().includes(q))
-    }
-    return true
+    if (!search) return true
+    const q = search.toLowerCase()
+    return (item.title || '').toLowerCase().includes(q) ||
+      (item.tags || []).some(t => t.toLowerCase().includes(q))
   })
+
+  // Build tag groups — items without tags go to "(Sem tag)"
+  const tagGroups: { tag: string; items: RepoItem[] }[] = []
+  const tagOrder = [...allTags]
+  tagOrder.forEach(tag => {
+    const groupItems = filtered.filter(i => (i.tags || []).includes(tag))
+    if (groupItems.length > 0) tagGroups.push({ tag, items: groupItems })
+  })
+  const untagged = filtered.filter(i => !i.tags || i.tags.length === 0)
+  if (untagged.length > 0) tagGroups.push({ tag: '(Sem tag)', items: untagged })
+
+  const toggleGroup = (tag: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(tag)) next.delete(tag)
+      else next.add(tag)
+      return next
+    })
+  }
+
+  // If no tags at all, show flat grid
+  const useGroups = allTags.length > 0
 
   return (
     <div className="min-h-full bg-zinc-950 p-6 max-w-7xl mx-auto">
@@ -312,7 +331,7 @@ export default function Repository() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-zinc-50">Repositório</h1>
-          <p className="text-zinc-400 text-sm mt-0.5">{items.length} imagem{items.length !== 1 ? 'ns' : ''}</p>
+          <p className="text-zinc-400 text-sm mt-0.5">{items.length} imagem{items.length !== 1 ? 'ns' : ''} · {allTags.length} categoria{allTags.length !== 1 ? 's' : ''}</p>
         </div>
         <button
           onClick={() => setShowUpload(true)}
@@ -323,37 +342,17 @@ export default function Repository() {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <div className="relative flex-1 min-w-48">
+      {/* Search */}
+      <div className="mb-6">
+        <div className="relative max-w-sm">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar imagens..."
-            className="w-full pl-9 pr-4 py-2.5 border border-zinc-700 rounded-xl text-sm bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            placeholder="Buscar imagens ou tags..."
+            className="w-full pl-9 pr-4 py-2.5 border border-zinc-700 rounded-xl text-sm bg-zinc-900 text-zinc-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </div>
-
-        {allTags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              onClick={() => setTagFilter('')}
-              className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition ${!tagFilter ? 'bg-emerald-600 text-white' : 'bg-zinc-900 border border-zinc-700 text-zinc-300 hover:border-emerald-600'}`}
-            >
-              Todos
-            </button>
-            {allTags.map(tag => (
-              <button
-                key={tag}
-                onClick={() => setTagFilter(tagFilter === tag ? '' : tag)}
-                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition ${tagFilter === tag ? 'bg-emerald-600 text-white' : 'bg-zinc-900 border border-zinc-700 text-zinc-300 hover:border-emerald-600'}`}
-              >
-                <Tag size={10} />{tag}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {loading ? (
@@ -365,15 +364,56 @@ export default function Repository() {
           <Image size={40} className="mx-auto text-zinc-600 mb-3" />
           <p className="text-zinc-400 font-medium">Nenhuma imagem encontrada</p>
           <p className="text-zinc-500 text-sm mt-1">
-            {search || tagFilter ? 'Tente outros filtros' : 'Envie sua primeira imagem ao repositório'}
+            {search ? 'Tente outros termos' : 'Envie sua primeira imagem ao repositório'}
           </p>
-          {!search && !tagFilter && (
+          {!search && (
             <button onClick={() => setShowUpload(true)} className="mt-4 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition">
               Enviar Imagem
             </button>
           )}
         </div>
+      ) : useGroups ? (
+        // Grouped by tag
+        <div className="space-y-8">
+          {tagGroups.map(group => {
+            const collapsed = collapsedGroups.has(group.tag)
+            return (
+              <section key={group.tag}>
+                {/* Group header */}
+                <button
+                  onClick={() => toggleGroup(group.tag)}
+                  className="flex items-center gap-3 w-full mb-4 group"
+                >
+                  <div className="flex items-center gap-2">
+                    <Tag size={14} className="text-emerald-500" />
+                    <span className="text-sm font-semibold text-zinc-200 capitalize">{group.tag}</span>
+                    <span className="text-xs text-zinc-500 bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded-full">
+                      {group.items.length}
+                    </span>
+                  </div>
+                  <div className="flex-1 h-px bg-zinc-800" />
+                  <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition">
+                    {collapsed ? '▶ Expandir' : '▼ Recolher'}
+                  </span>
+                </button>
+
+                {!collapsed && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                    {group.items.map(item => (
+                      <ImageCard
+                        key={item.id}
+                        item={item}
+                        onClick={() => setViewItem(item)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            )
+          })}
+        </div>
       ) : (
+        // Flat grid (no tags)
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {filtered.map(item => (
             <ImageCard

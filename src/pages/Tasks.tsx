@@ -728,13 +728,15 @@ function KanbanView({ tasks, onSelect }: { tasks: LocalTask[]; onSelect: (t: Loc
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+type GroupBy = 'none' | 'project' | 'assignee'
+
 export default function Tasks() {
   const [tasks, setTasks] = useState<LocalTask[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'list' | 'kanban'>('list')
   const [search, setSearch] = useState('')
   const [filterPriority, setFilterPriority] = useState<TaskPriority | 'all'>('all')
-  const [filterProject, setFilterProject] = useState<string>('all')
+  const [groupBy, setGroupBy] = useState<GroupBy>('none')
   const [selectedTask, setSelectedTask] = useState<LocalTask | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [modalTask, setModalTask] = useState<LocalTask | null>(null)
@@ -757,14 +759,49 @@ export default function Tasks() {
   }, [])
 
   const projects = Array.from(new Set(tasks.map(t => t.project).filter(Boolean)))
+  const assignees = Array.from(new Set(tasks.map(t => t.assignee).filter(Boolean)))
 
   const filtered = tasks.filter(t => {
     const q = search.toLowerCase()
     if (q && !t.name.toLowerCase().includes(q) && !t.project.toLowerCase().includes(q)) return false
     if (filterPriority !== 'all' && t.priority !== filterPriority) return false
-    if (filterProject !== 'all' && t.project !== filterProject) return false
     return true
   })
+
+  // Group tasks into sections when groupBy is active
+  const getGroupedSections = (): { label: string; tasks: LocalTask[] }[] => {
+    if (groupBy === 'project') {
+      const groups: { label: string; tasks: LocalTask[] }[] = []
+      const seen = new Set<string>()
+      filtered.forEach(t => {
+        const key = t.project || '(Sem projeto)'
+        if (!seen.has(key)) { seen.add(key); groups.push({ label: key, tasks: [] }) }
+      })
+      filtered.forEach(t => {
+        const key = t.project || '(Sem projeto)'
+        const g = groups.find(g => g.label === key)!
+        g.tasks.push(t)
+      })
+      return groups
+    }
+    if (groupBy === 'assignee') {
+      const groups: { label: string; tasks: LocalTask[] }[] = []
+      const seen = new Set<string>()
+      filtered.forEach(t => {
+        const key = t.assignee || '(Sem responsável)'
+        if (!seen.has(key)) { seen.add(key); groups.push({ label: key, tasks: [] }) }
+      })
+      filtered.forEach(t => {
+        const key = t.assignee || '(Sem responsável)'
+        const g = groups.find(g => g.label === key)!
+        g.tasks.push(t)
+      })
+      return groups
+    }
+    return [{ label: '', tasks: filtered }]
+  }
+
+  const groupedSections = getGroupedSections()
 
   const total = tasks.length
   const inProgress = tasks.filter(t => t.status === 'in_progress').length
@@ -846,15 +883,18 @@ export default function Tasks() {
               <option value="low">Baixa</option>
             </select>
 
-            {/* Project filter */}
-            <select
-              value={filterProject}
-              onChange={e => setFilterProject(e.target.value)}
-              className="text-sm border border-zinc-800 rounded-xl px-3 py-2.5 bg-zinc-950 text-zinc-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all cursor-pointer appearance-none"
-            >
-              <option value="all">Projeto</option>
-              {projects.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
+            {/* Group by buttons */}
+            <div className="flex bg-zinc-900 rounded-xl p-1 border border-zinc-800 gap-0.5">
+              {([['none', 'Todos'], ['project', 'Por Projeto'], ['assignee', 'Por Responsável']] as [GroupBy, string][]).map(([val, label]) => (
+                <button
+                  key={val}
+                  onClick={() => setGroupBy(val)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${groupBy === val ? 'bg-zinc-800 text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
             <div className="ml-auto flex items-center gap-2">
               <button
@@ -876,6 +916,33 @@ export default function Tasks() {
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+            </div>
+          ) : groupBy !== 'none' && view === 'list' ? (
+            // Grouped sections — each group gets its own table
+            <div className="space-y-8">
+              {groupedSections.map(section => (
+                <div key={section.label}>
+                  {/* Section header */}
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex items-center gap-2">
+                      {groupBy === 'project' ? <Briefcase className="w-4 h-4 text-emerald-500" /> : <User className="w-4 h-4 text-emerald-500" />}
+                      <span className="text-sm font-semibold text-zinc-200">{section.label}</span>
+                    </div>
+                    <span className="text-xs text-zinc-500 bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded-full">{section.tasks.length} tarefa{section.tasks.length !== 1 ? 's' : ''}</span>
+                    <div className="flex-1 h-px bg-zinc-800" />
+                  </div>
+                  <ListView
+                    tasks={section.tasks}
+                    onSelect={t => setSelectedTask(prev => prev?.id === t.id ? null : t)}
+                    selectedId={selectedTask?.id}
+                  />
+                </div>
+              ))}
+              {groupedSections.every(s => s.tasks.length === 0) && (
+                <div className="flex flex-col items-center justify-center h-[40vh] text-center">
+                  <p className="text-xl text-zinc-50 font-bold">Nenhuma tarefa encontrada</p>
+                </div>
+              )}
             </div>
           ) : view === 'list' ? (
             <ListView
