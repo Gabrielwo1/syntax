@@ -487,8 +487,9 @@ export default function Quotes() {
       .finally(() => setLoading(false))
   }, [])
 
-  const handleNew = async () => {
-    const q = {
+  const handleNew = () => {
+    const newQ: Quote = {
+      id: '',
       number: nextQuoteNumber(quotes),
       client: '',
       clientEmail: '',
@@ -502,25 +503,26 @@ export default function Quotes() {
       status: 'draft' as QuoteStatus,
       createdAt: new Date().toISOString(),
     }
-    try {
-      const { quote } = await quotesApi.create(q)
-      const newQ = quote as Quote
-      setQuotes(prev => [newQ, ...prev])
-      setEditingQuote(newQ)
-    } catch {
-      toast.error('Erro ao criar orçamento')
-    }
+    setEditingQuote(newQ)
   }
 
   const handleSave = async (updated: Quote) => {
     try {
-      const { quote } = await quotesApi.update(updated.id, updated as any)
-      const saved = quote as Quote
-      setQuotes(prev => prev.map(q => q.id === saved.id ? saved : q))
+      if (!updated.id) {
+        // Novo orçamento — criar no servidor
+        const { quote } = await quotesApi.create(updated as any)
+        const saved = quote as Quote
+        setQuotes(prev => [saved, ...prev])
+      } else {
+        // Orçamento existente — atualizar
+        const { quote } = await quotesApi.update(updated.id, updated as any)
+        const saved = quote as Quote
+        setQuotes(prev => prev.map(q => q.id === saved.id ? saved : q))
+      }
       setEditingQuote(null)
       toast.success('Orçamento salvo')
-    } catch {
-      toast.error('Erro ao salvar orçamento')
+    } catch (err: any) {
+      toast.error(`Erro ao salvar orçamento: ${err?.message || 'tente novamente'}`)
     }
   }
 
@@ -530,8 +532,8 @@ export default function Quotes() {
       setQuotes(prev => prev.filter(q => q.id !== id))
       setEditingQuote(null)
       toast.success('Orçamento excluído')
-    } catch {
-      toast.error('Erro ao excluir orçamento')
+    } catch (err: any) {
+      toast.error(`Erro ao excluir: ${err?.message || 'tente novamente'}`)
     }
   }
 
