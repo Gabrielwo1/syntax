@@ -123,6 +123,7 @@ async function requireAuth(c: any): Promise<{ user: any } | Response> {
 // ─── Storage bucket initialization ───────────────────────────────────────────
 const BUCKET_PDFS = "make-cee56a32-pdfs";
 const BUCKET_REPO = "make-cee56a32-repo";
+const BUCKET_SOCIAL = "make-cee56a32-social";
 
 async function ensureBucket(
   supabase: any,
@@ -148,6 +149,7 @@ try {
     const adminClient = createClient(supabaseUrl, supabaseKey);
     await ensureBucket(adminClient, BUCKET_PDFS, { allowedMimeTypes: ['application/pdf'] });
     await ensureBucket(adminClient, BUCKET_REPO);
+    await ensureBucket(adminClient, BUCKET_SOCIAL, { allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] });
   }
 } catch (error) {
   console.error("[Storage] Initialization error:", error);
@@ -1448,6 +1450,186 @@ app.post("/make-server-cee56a32/upload", async (c) => {
   } catch (error) {
     console.error("[Upload] Unexpected error:", error);
     return c.json({ error: "Failed to upload file", details: String(error) }, 500);
+  }
+});
+
+// ─── Social Media ─────────────────────────────────────────────────────────────
+
+// GET /social/requests — list all art requests
+app.get("/make-server-cee56a32/social/requests", async (c) => {
+  try {
+    const authResult = await requireAuth(c);
+    if (authResult instanceof Response) return authResult;
+    const items = await kv.getByPrefix("social:req:");
+    items.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return c.json({ requests: items });
+  } catch (err) {
+    console.error("[Social] GET requests error:", err);
+    return c.json({ error: "Erro ao buscar solicitações" }, 500);
+  }
+});
+
+// POST /social/requests — create a new art request
+app.post("/make-server-cee56a32/social/requests", async (c) => {
+  try {
+    const authResult = await requireAuth(c);
+    if (authResult instanceof Response) return authResult;
+    const body = await c.req.json();
+    const { client, format, deadline, description } = body;
+    if (!client || !format) return c.json({ error: "client e format são obrigatórios" }, 400);
+    const id = `social:req:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`;
+    const request = {
+      id,
+      client,
+      format,
+      deadline: deadline || null,
+      description: description || null,
+      status: "pendente",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await kv.set(id, request);
+    return c.json({ request });
+  } catch (err) {
+    console.error("[Social] POST request error:", err);
+    return c.json({ error: "Erro ao criar solicitação" }, 500);
+  }
+});
+
+// PUT /social/requests/:id — update a request
+app.put("/make-server-cee56a32/social/requests/:id", async (c) => {
+  try {
+    const authResult = await requireAuth(c);
+    if (authResult instanceof Response) return authResult;
+    const id = decodeURIComponent(c.req.param("id"));
+    const existing = await kv.get(id);
+    if (!existing) return c.json({ error: "Solicitação não encontrada" }, 404);
+    const body = await c.req.json();
+    const updated = { ...existing, ...body, id, updatedAt: new Date().toISOString() };
+    await kv.set(id, updated);
+    return c.json({ request: updated });
+  } catch (err) {
+    console.error("[Social] PUT request error:", err);
+    return c.json({ error: "Erro ao atualizar solicitação" }, 500);
+  }
+});
+
+// DELETE /social/requests/:id — delete a request
+app.delete("/make-server-cee56a32/social/requests/:id", async (c) => {
+  try {
+    const authResult = await requireAuth(c);
+    if (authResult instanceof Response) return authResult;
+    const id = decodeURIComponent(c.req.param("id"));
+    const existing = await kv.get(id);
+    if (!existing) return c.json({ error: "Solicitação não encontrada" }, 404);
+    await kv.del(id);
+    return c.json({ success: true });
+  } catch (err) {
+    console.error("[Social] DELETE request error:", err);
+    return c.json({ error: "Erro ao excluir solicitação" }, 500);
+  }
+});
+
+// GET /social/arts — list all delivered arts
+app.get("/make-server-cee56a32/social/arts", async (c) => {
+  try {
+    const authResult = await requireAuth(c);
+    if (authResult instanceof Response) return authResult;
+    const items = await kv.getByPrefix("social:art:");
+    items.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return c.json({ arts: items });
+  } catch (err) {
+    console.error("[Social] GET arts error:", err);
+    return c.json({ error: "Erro ao buscar artes" }, 500);
+  }
+});
+
+// POST /social/arts — upload art file
+app.post("/make-server-cee56a32/social/arts", async (c) => {
+  try {
+    const authResult = await requireAuth(c);
+    if (authResult instanceof Response) return authResult;
+    const body = await c.req.parseBody();
+    const file = body["file"] as File;
+    if (!file) return c.json({ error: "file é obrigatório" }, 400);
+    const title = body["title"] as string | undefined;
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const fileExt = file.name.split(".").pop() || "jpg";
+    const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+    const filePath = `arts/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_SOCIAL)
+      .upload(filePath, file, { contentType: file.type, upsert: false });
+
+    if (uploadError) {
+      console.error("[Social] Upload error:", uploadError);
+      return c.json({ error: "Falha ao fazer upload", details: uploadError.message }, 500);
+    }
+
+    const id = `social:art:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`;
+    const art = {
+      id,
+      title: title || file.name,
+      path: filePath,
+      mimeType: file.type,
+      createdAt: new Date().toISOString(),
+    };
+    await kv.set(id, art);
+    return c.json({ art });
+  } catch (err) {
+    console.error("[Social] POST art error:", err);
+    return c.json({ error: "Erro ao entregar arte" }, 500);
+  }
+});
+
+// GET /social/arts/url — get signed URL for an art
+app.get("/make-server-cee56a32/social/arts/url", async (c) => {
+  try {
+    const authResult = await requireAuth(c);
+    if (authResult instanceof Response) return authResult;
+    const path = c.req.query("path");
+    if (!path) return c.json({ error: "path query param obrigatório" }, 400);
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const { data, error } = await supabase.storage
+      .from(BUCKET_SOCIAL)
+      .createSignedUrl(path, 3600);
+
+    if (error) return c.json({ error: "Falha ao gerar URL", details: error.message }, 500);
+    return c.json({ signedUrl: data.signedUrl });
+  } catch (err) {
+    console.error("[Social] GET art URL error:", err);
+    return c.json({ error: "Erro ao obter URL" }, 500);
+  }
+});
+
+// DELETE /social/arts/:id — delete an art
+app.delete("/make-server-cee56a32/social/arts/:id", async (c) => {
+  try {
+    const authResult = await requireAuth(c);
+    if (authResult instanceof Response) return authResult;
+    const id = decodeURIComponent(c.req.param("id"));
+    const art = await kv.get(id);
+    if (!art) return c.json({ error: "Arte não encontrada" }, 404);
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    await supabase.storage.from(BUCKET_SOCIAL).remove([art.path]);
+    await kv.del(id);
+    return c.json({ success: true });
+  } catch (err) {
+    console.error("[Social] DELETE art error:", err);
+    return c.json({ error: "Erro ao excluir arte" }, 500);
   }
 });
 
