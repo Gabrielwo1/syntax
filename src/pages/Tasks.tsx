@@ -55,13 +55,13 @@ function apiToLocal(t: Task): LocalTask {
     id: t.id,
     project: t.project ?? '',
     name: t.name,
-    description: '',
+    description: t.description ?? '',
     status: (t.status === 'completed' ? 'done' : t.status) as TaskStatus,
-    priority: 'medium',
+    priority: (t.priority as TaskPriority) ?? 'medium',
     due: t.due ?? '',
     assignee: t.assignee ?? '',
-    tags: [],
-    estimatedHours: undefined,
+    tags: t.tags ?? [],
+    estimatedHours: t.estimatedHours ?? undefined,
     completedAt: undefined,
     createdAt: t.createdAt,
     sprintId: t.sprintId ?? '',
@@ -273,35 +273,23 @@ function TaskModal({ task, onClose, onSaved, sprints, defaultSprintId, users, al
       const allAttachments = [...(form.attachments || []), ...uploadedIds]
 
       const apiStatus = form.status === 'done' ? 'completed' : form.status as 'not_started' | 'in_progress'
-      let saved: Task
-      if (task) {
-        saved = await tasksApi.updateTask(task.id, {
-          name: form.name, project: form.project || undefined,
-          assignee: form.assignee || undefined, due: form.due || undefined,
-          status: apiStatus, sprintId: form.sprintId || undefined,
-          attachments: allAttachments.length > 0 ? allAttachments : undefined,
-        }) as Task
-      } else {
-        saved = await tasksApi.createTask({
-          name: form.name, project: form.project || undefined,
-          assignee: form.assignee || undefined, due: form.due || undefined,
-          status: apiStatus, sprintId: form.sprintId || undefined,
-          attachments: allAttachments.length > 0 ? allAttachments : undefined,
-        }) as Task
-      }
-      const local: LocalTask = {
-        ...apiToLocal(saved),
-        description: form.description,
+      const payload: Partial<Task> = {
+        name: form.name,
+        project: form.project || undefined,
+        assignee: form.assignee || undefined,
+        due: form.due || undefined,
+        status: apiStatus,
+        sprintId: form.sprintId || undefined,
+        attachments: allAttachments.length > 0 ? allAttachments : undefined,
+        description: form.description || undefined,
         priority: form.priority,
-        tags: form.tags,
-        estimatedHours: form.estimatedHours,
-        status: form.status,
-        due: form.due || saved.due || '',
-        project: form.project,
-        assignee: form.assignee,
-        sprintId: form.sprintId,
-        attachments: allAttachments,
+        tags: form.tags.length > 0 ? form.tags : undefined,
+        estimatedHours: form.estimatedHours ?? undefined,
       }
+      const saved = task
+        ? await tasksApi.updateTask(task.id, payload)
+        : await tasksApi.createTask(payload)
+      const local: LocalTask = apiToLocal(saved)
       toast.success(task ? 'Tarefa atualizada!' : 'Tarefa criada!')
       onSaved(local)
       onClose()

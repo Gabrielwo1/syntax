@@ -92,6 +92,10 @@ export interface Task {
   status: 'not_started' | 'in_progress' | 'completed'
   attachments?: string[]
   sprintId?: string
+  description?: string
+  priority?: 'urgent' | 'high' | 'medium' | 'low'
+  tags?: string[]
+  estimatedHours?: number | null
   createdAt: string
 }
 
@@ -354,19 +358,19 @@ export const crmApi = {
   getLeads: () => apiFetch<{ leads: Lead[] }>('/crm/leads'),
 
   createLead: (data: Partial<Lead>) =>
-    apiFetch('/crm/leads', {
+    apiFetch<{ lead: Lead }>('/crm/leads', {
       method: 'POST',
       body: JSON.stringify(data),
-    }),
+    }).then(r => r.lead),
 
   updateLead: (id: string, data: Partial<Lead> & { activityNote?: string; stage?: string }) =>
-    apiFetch(`/crm/leads/${id}`, {
+    apiFetch<{ lead: Lead }>(`/crm/leads/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(data),
-    }),
+    }).then(r => r.lead),
 
   deleteLead: (id: string) =>
-    apiFetch(`/crm/leads/${id}`, { method: 'DELETE' }),
+    apiFetch(`/crm/leads/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   getFolders: () => apiFetch<{ folders: Folder[] }>('/crm/folders'),
 
@@ -392,25 +396,25 @@ export const financeiroApi = {
     notes?: string
     recurrence?: string
   }) =>
-    apiFetch('/financeiro/entries', {
+    apiFetch<{ entry: FinancialEntry }>('/financeiro/entries', {
       method: 'POST',
       body: JSON.stringify(data),
-    }),
+    }).then(r => r.entry),
 
   updateEntry: (id: string, data: Partial<FinancialEntry>) =>
-    apiFetch(`/financeiro/entries/${id}`, {
+    apiFetch<{ entry: FinancialEntry }>(`/financeiro/entries/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(data),
-    }),
+    }).then(r => r.entry),
 
   markPaid: (id: string) =>
-    apiFetch(`/financeiro/entries/${id}`, {
+    apiFetch<{ entry: FinancialEntry }>(`/financeiro/entries/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify({ status: 'paid' }),
-    }),
+    }).then(r => r.entry),
 
   deleteEntry: (id: string) =>
-    apiFetch(`/financeiro/entries/${id}`, { method: 'DELETE' }),
+    apiFetch(`/financeiro/entries/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 }
 
 // ── Tasks ─────────────────────────────────────────────────────────────────────
@@ -419,19 +423,19 @@ export const tasksApi = {
   getTasks: () => apiFetch<{ tasks: Task[] }>('/tasks'),
 
   createTask: (data: Partial<Task>) =>
-    apiFetch('/tasks', {
+    apiFetch<{ task: Task }>('/tasks', {
       method: 'POST',
       body: JSON.stringify(data),
-    }),
+    }).then(r => r.task),
 
   updateTask: (id: string, data: Partial<Task>) =>
-    apiFetch(`/tasks/${id}`, {
+    apiFetch<{ task: Task }>(`/tasks/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(data),
-    }),
+    }).then(r => r.task),
 
   deleteTask: (id: string) =>
-    apiFetch(`/tasks/${id}`, { method: 'DELETE' }),
+    apiFetch(`/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   aiGenerate: (text: string) =>
     apiFetch<{ tasks: Task[] }>('/tasks/ai-generate', {
@@ -570,11 +574,11 @@ export const quotesApi = {
     }),
 
   update: (id: string, data: Record<string, unknown>) =>
-    apiFetch<{ quote: any }>(`/quotes/${id}`, {
+    apiFetch<{ quote: any }>(`/quotes/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
 
   delete: (id: string) =>
-    apiFetch(`/quotes/${id}`, { method: 'DELETE' }),
+    apiFetch(`/quotes/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 }

@@ -438,7 +438,7 @@ app.post("/make-server-cee56a32/crm/leads", async (c) => {
       return c.json({ error: "name and email are required" }, 400);
     }
 
-    const id = `crm:lead:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`;
+    const id = `crm-lead-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const lead = {
       id,
       name,
@@ -564,9 +564,7 @@ app.post("/make-server-cee56a32/crm/leads/bulk", async (c) => {
         leadData.email ||
         `${name.toLowerCase().replace(/\s+/g, "")}_${Date.now()}@exemplo.com`;
 
-      const id = `crm:lead:${Date.now()}:${Math.random()
-        .toString(36)
-        .substr(2, 9)}`;
+      const id = `crm-lead-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
       const lead = {
         id,
@@ -709,7 +707,7 @@ app.post("/make-server-cee56a32/financeiro/entries", async (c) => {
       return c.json({ error: "type, description, amount and dueDate are required" }, 400);
     }
 
-    const id = `fin:entry:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`;
+    const id = `fin-entry-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const entry = {
       id,
       type, // "receivable" | "payable"
@@ -957,6 +955,10 @@ app.delete("/make-server-cee56a32/auth/users/:id", async (c) => {
 
 // ─── TASKS ENDPOINTS ──────────────────────────────────────────────────────────
 
+// ─── TASKS ENDPOINTS ─────────────────────────────────────────────────────────
+// NOTE: Specific routes (sprints, ai-generate) MUST be registered before the
+// wildcard /tasks/:id routes to avoid Hono matching them as an :id param.
+
 // List all tasks
 app.get("/make-server-cee56a32/tasks", async (c) => {
   try {
@@ -975,13 +977,14 @@ app.get("/make-server-cee56a32/tasks", async (c) => {
 app.post("/make-server-cee56a32/tasks", async (c) => {
   try {
     const body = await c.req.json();
-    const { name, project, assignee, due, status, attachments, sprintId } = body;
+    const { name, project, assignee, due, status, attachments, sprintId, description, priority, tags, estimatedHours } = body;
 
     if (!name) {
       return c.json({ error: "name is required" }, 400);
     }
 
-    const id = `task:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`;
+    // Use hyphens in ID to avoid URL-encoding issues with colons
+    const id = `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const task = {
       id,
       name,
@@ -991,6 +994,10 @@ app.post("/make-server-cee56a32/tasks", async (c) => {
       status: status || "not_started",
       attachments: attachments || [],
       sprintId: sprintId || "",
+      description: description || "",
+      priority: priority || "medium",
+      tags: tags || [],
+      estimatedHours: estimatedHours ?? null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -1008,40 +1015,7 @@ app.post("/make-server-cee56a32/tasks", async (c) => {
   }
 });
 
-// Update task
-app.put("/make-server-cee56a32/tasks/:id", async (c) => {
-  try {
-    const id = decodeURIComponent(c.req.param("id"));
-    const body = await c.req.json();
-
-    const existing = await kv.get(id);
-    if (!existing) return c.json({ error: "Task not found" }, 404);
-
-    const updated = { ...existing, ...body, id, updatedAt: new Date().toISOString() };
-    await kv.set(id, updated);
-
-    return c.json({ success: true, task: updated });
-  } catch (error) {
-    console.error("[Tasks] Error updating task:", error);
-    return c.json({ error: "Failed to update task", details: String(error) }, 500);
-  }
-});
-
-// Delete task
-app.delete("/make-server-cee56a32/tasks/:id", async (c) => {
-  try {
-    const id = decodeURIComponent(c.req.param("id"));
-    await kv.del(id);
-    const list = ((await kv.get("tasks:list")) || []).filter((tid: string) => tid !== id);
-    await kv.set("tasks:list", list);
-    return c.json({ success: true });
-  } catch (error) {
-    console.error("[Tasks] Error deleting task:", error);
-    return c.json({ error: "Failed to delete task", details: String(error) }, 500);
-  }
-});
-
-// ─── TASK SPRINT GROUPS ENDPOINTS ───────────────────────────────────────────
+// ─── TASK SPRINT ENDPOINTS (must be before PUT/DELETE /tasks/:id) ────────────
 
 app.get("/make-server-cee56a32/tasks/sprints", async (c) => {
   try {
@@ -1057,7 +1031,7 @@ app.post("/make-server-cee56a32/tasks/sprints", async (c) => {
     const body = await c.req.json();
     const { name, startDate, endDate } = body;
     if (!name?.trim()) return c.json({ error: "name is required" }, 400);
-    const id = `sprint:${Date.now()}:${Math.random().toString(36).substr(2, 6)}`;
+    const id = `sprint-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     const sprint = { id, name, startDate: startDate || "", endDate: endDate || "", createdAt: new Date().toISOString() };
     const sprints = (await kv.get("tasks:sprints")) || [];
     sprints.push(sprint);
@@ -1086,6 +1060,39 @@ app.delete("/make-server-cee56a32/tasks/sprints/:id", async (c) => {
     return c.json({ success: true });
   } catch (error) {
     return c.json({ error: "Failed to delete sprint", details: String(error) }, 500);
+  }
+});
+
+// Update task (wildcard — must be after all specific /tasks/* routes)
+app.put("/make-server-cee56a32/tasks/:id", async (c) => {
+  try {
+    const id = decodeURIComponent(c.req.param("id"));
+    const body = await c.req.json();
+
+    const existing = await kv.get(id);
+    if (!existing) return c.json({ error: "Task not found" }, 404);
+
+    const updated = { ...existing, ...body, id, updatedAt: new Date().toISOString() };
+    await kv.set(id, updated);
+
+    return c.json({ success: true, task: updated });
+  } catch (error) {
+    console.error("[Tasks] Error updating task:", error);
+    return c.json({ error: "Failed to update task", details: String(error) }, 500);
+  }
+});
+
+// Delete task (wildcard — must be after all specific /tasks/* routes)
+app.delete("/make-server-cee56a32/tasks/:id", async (c) => {
+  try {
+    const id = decodeURIComponent(c.req.param("id"));
+    await kv.del(id);
+    const list = ((await kv.get("tasks:list")) || []).filter((tid: string) => tid !== id);
+    await kv.set("tasks:list", list);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("[Tasks] Error deleting task:", error);
+    return c.json({ error: "Failed to delete task", details: String(error) }, 500);
   }
 });
 
@@ -1158,6 +1165,62 @@ Texto a ser analisado: "${text.replace(/"/g, "'")}"`;
   } catch (error) {
     console.error("[Tasks AI] Error generating tasks:", error);
     return c.json({ error: "Failed to generate tasks with AI", details: String(error) }, 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QUOTES ENDPOINTS
+
+app.get("/make-server-cee56a32/quotes", async (c) => {
+  try {
+    const list = (await kv.get("quotes:list")) || [];
+    if (list.length === 0) return c.json({ quotes: [] });
+    const quotes = (await kv.mget(list)).filter(Boolean);
+    quotes.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return c.json({ quotes });
+  } catch (error) {
+    return c.json({ error: "Failed to list quotes", details: String(error) }, 500);
+  }
+});
+
+app.post("/make-server-cee56a32/quotes", async (c) => {
+  try {
+    const body = await c.req.json();
+    const id = `quote-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const quote = { ...body, id, createdAt: body.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+    await kv.set(id, quote);
+    const list = (await kv.get("quotes:list")) || [];
+    list.push(id);
+    await kv.set("quotes:list", list);
+    return c.json({ success: true, quote });
+  } catch (error) {
+    return c.json({ error: "Failed to create quote", details: String(error) }, 500);
+  }
+});
+
+app.put("/make-server-cee56a32/quotes/:id", async (c) => {
+  try {
+    const id = decodeURIComponent(c.req.param("id"));
+    const body = await c.req.json();
+    const existing = await kv.get(id);
+    if (!existing) return c.json({ error: "Quote not found" }, 404);
+    const updated = { ...existing, ...body, id, updatedAt: new Date().toISOString() };
+    await kv.set(id, updated);
+    return c.json({ success: true, quote: updated });
+  } catch (error) {
+    return c.json({ error: "Failed to update quote", details: String(error) }, 500);
+  }
+});
+
+app.delete("/make-server-cee56a32/quotes/:id", async (c) => {
+  try {
+    const id = decodeURIComponent(c.req.param("id"));
+    await kv.del(id);
+    const list = ((await kv.get("quotes:list")) || []).filter((qid: string) => qid !== id);
+    await kv.set("quotes:list", list);
+    return c.json({ success: true });
+  } catch (error) {
+    return c.json({ error: "Failed to delete quote", details: String(error) }, 500);
   }
 });
 
