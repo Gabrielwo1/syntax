@@ -1696,6 +1696,74 @@ app.delete("/make-server-cee56a32/social/arts/:id", async (c) => {
   }
 });
 
+// ─── CRM AI EXTRACT LEADS ────────────────────────────────────────────────────
+
+app.post("/make-server-cee56a32/crm/ai-extract", async (c) => {
+  try {
+    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+    if (!geminiApiKey) {
+      return c.json({ error: "GEMINI_API_KEY não configurada no servidor" }, 500);
+    }
+
+    const body = await c.req.json();
+    const { type, content, base64, mimeType } = body;
+
+    let parts: any[];
+
+    if (type === "image") {
+      if (!base64 || !mimeType) {
+        return c.json({ error: "base64 e mimeType são obrigatórios para imagens" }, 400);
+      }
+      parts = [
+        { inlineData: { mimeType, data: base64 } },
+        { text: `Analise esta imagem e extraia todos os contatos/leads encontrados. Retorne um array JSON com objetos contendo: name (obrigatório), phone, email, company, service, notes (todos opcionais). Retorne APENAS o array JSON, sem markdown.` },
+      ];
+    } else {
+      if (!content?.trim()) {
+        return c.json({ error: "content é obrigatório para texto" }, 400);
+      }
+      parts = [
+        { text: `Analise o texto abaixo e extraia todos os contatos/leads. Retorne um array JSON com objetos contendo: name (obrigatório), phone, email, company, service, notes (todos opcionais). Retorne APENAS o array JSON, sem markdown.\n\nTexto:\n${content}` },
+      ];
+    }
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.1 } }),
+      }
+    );
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      console.error("[CRM AI] Gemini error:", response.status, JSON.stringify(errData));
+      if (response.status === 429) {
+        const retryDelay = errData?.error?.details?.find((d: any) => d?.metadata?.retryDelay)?.metadata?.retryDelay;
+        const seconds = retryDelay ? parseInt(retryDelay) : 60;
+        return c.json({ error: `Limite da API de IA atingido. Tente novamente em ${seconds} segundos.` }, 429);
+      }
+      return c.json({ error: `Gemini API error ${response.status}`, details: errData }, 500);
+    }
+
+    const data = await response.json();
+    let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+    text = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+    const match = text.match(/\[[\s\S]*\]/);
+    text = match ? match[0] : "[]";
+
+    let leads = JSON.parse(text);
+    if (!Array.isArray(leads)) leads = [leads].filter(Boolean);
+
+    console.log("[CRM AI] Extracted", leads.length, "lead(s)");
+    return c.json({ leads });
+  } catch (err) {
+    console.error("[CRM AI] Error:", err);
+    return c.json({ error: "Erro ao processar com IA", details: String(err) }, 500);
+  }
+});
+
 // ─── Activity Log ─────────────────────────────────────────────────────────────
 
 // POST /activity-log — record an action (any authenticated user)
