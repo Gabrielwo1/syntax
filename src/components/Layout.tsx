@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Share2,
   Receipt,
+  Activity,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { toast } from 'sonner'
@@ -38,6 +39,7 @@ const navItems: NavItem[] = [
   { to: '/orcamento', label: 'Orçamentos', icon: <Receipt size={18} />, permission: 'orcamento' },
   { to: '/social-media', label: 'Social Media', icon: <Share2 size={18} />, permission: 'social-media' },
   { to: '/usuarios', label: 'Usuários', icon: <Users size={18} />, adminOnly: true },
+  { to: '/log-funcoes', label: 'Log de Funções', icon: <Activity size={18} />, adminOnly: true },
 ]
 
 

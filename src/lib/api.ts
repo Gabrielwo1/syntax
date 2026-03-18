@@ -142,6 +142,20 @@ export interface AppUser {
   created_at: string
 }
 
+// ── Activity Log types ───────────────────────────────────────────────────────
+
+export interface ActivityLog {
+  id: string
+  userId: string
+  userEmail: string
+  userName: string
+  action: string
+  module: string
+  description: string
+  metadata?: Record<string, unknown> | null
+  createdAt: string
+}
+
 // ── Core fetch helper ────────────────────────────────────────────────────────
 
 async function getAuthHeaders(isFormData = false): Promise<Record<string, string>> {
@@ -157,6 +171,62 @@ async function getAuthHeaders(isFormData = false): Promise<Record<string, string
     headers['Content-Type'] = 'application/json'
   }
   return headers
+}
+
+// ── Auto-log mapping ─────────────────────────────────────────────────────────
+
+function inferLogInfo(method: string, path: string): { action: string; module: string; description: string } | null {
+  const m = (method || 'GET').toUpperCase()
+  if (m === 'GET') return null
+  if (path.includes('/activity-log')) return null
+
+  // CRM
+  if (path === '/crm/leads' && m === 'POST') return { module: 'CRM', action: 'Criação', description: 'Novo lead criado' }
+  if (path === '/crm/leads/bulk' && m === 'POST') return { module: 'CRM', action: 'Importação', description: 'Leads importados em massa' }
+  if (/^\/crm\/leads\/.+/.test(path) && m === 'PUT') return { module: 'CRM', action: 'Atualização', description: 'Lead atualizado' }
+  if (/^\/crm\/leads\/.+/.test(path) && m === 'DELETE') return { module: 'CRM', action: 'Exclusão', description: 'Lead excluído' }
+  if (path === '/crm/folders' && m === 'PUT') return { module: 'CRM', action: 'Atualização', description: 'Pastas do CRM atualizadas' }
+
+  // Financeiro
+  if (path === '/financeiro/entries' && m === 'POST') return { module: 'Financeiro', action: 'Criação', description: 'Lançamento financeiro criado' }
+  if (/^\/financeiro\/entries\/.+/.test(path) && m === 'PUT') return { module: 'Financeiro', action: 'Atualização', description: 'Lançamento financeiro atualizado' }
+  if (/^\/financeiro\/entries\/.+/.test(path) && m === 'DELETE') return { module: 'Financeiro', action: 'Exclusão', description: 'Lançamento financeiro excluído' }
+
+  // Tarefas
+  if (path === '/tasks/ai-generate' && m === 'POST') return { module: 'Tarefas', action: 'IA', description: 'Tarefas geradas com IA' }
+  if (path === '/tasks' && m === 'POST') return { module: 'Tarefas', action: 'Criação', description: 'Tarefa criada' }
+  if (/^\/tasks\/.+/.test(path) && m === 'PUT') return { module: 'Tarefas', action: 'Atualização', description: 'Tarefa atualizada' }
+  if (/^\/tasks\/.+/.test(path) && m === 'DELETE') return { module: 'Tarefas', action: 'Exclusão', description: 'Tarefa excluída' }
+
+  // PDFs
+  if (path === '/pdfs' && m === 'POST') return { module: 'PDFs', action: 'Upload', description: 'PDF enviado' }
+  if (/^\/pdfs\/.+/.test(path) && m === 'DELETE') return { module: 'PDFs', action: 'Exclusão', description: 'PDF excluído' }
+
+  // Repositório
+  if (path === '/repo' && m === 'POST') return { module: 'Repositório', action: 'Upload', description: 'Arquivo enviado ao repositório' }
+  if (/^\/repo\/.+/.test(path) && m === 'DELETE') return { module: 'Repositório', action: 'Exclusão', description: 'Arquivo excluído do repositório' }
+
+  // Social Media
+  if (path === '/social/requests' && m === 'POST') return { module: 'Social Media', action: 'Criação', description: 'Solicitação de arte criada' }
+  if (/^\/social\/requests\/.+/.test(path) && m === 'PUT') return { module: 'Social Media', action: 'Atualização', description: 'Solicitação de arte atualizada' }
+  if (/^\/social\/requests\/.+/.test(path) && m === 'DELETE') return { module: 'Social Media', action: 'Exclusão', description: 'Solicitação de arte excluída' }
+  if (path === '/social/arts' && m === 'POST') return { module: 'Social Media', action: 'Entrega', description: 'Arte entregue' }
+  if (/^\/social\/arts\/.+/.test(path) && m === 'DELETE') return { module: 'Social Media', action: 'Exclusão', description: 'Arte entregue excluída' }
+
+  // Orçamentos
+  if (path === '/quotes' && m === 'POST') return { module: 'Orçamentos', action: 'Criação', description: 'Orçamento criado' }
+  if (/^\/quotes\/.+/.test(path) && m === 'PUT') return { module: 'Orçamentos', action: 'Atualização', description: 'Orçamento atualizado' }
+  if (/^\/quotes\/.+/.test(path) && m === 'DELETE') return { module: 'Orçamentos', action: 'Exclusão', description: 'Orçamento excluído' }
+
+  // Usuários
+  if (path === '/auth/signup' && m === 'POST') return { module: 'Usuários', action: 'Criação', description: 'Novo usuário criado' }
+  if (/^\/auth\/users\/.+/.test(path) && m === 'PUT') return { module: 'Usuários', action: 'Atualização', description: 'Usuário atualizado' }
+  if (/^\/auth\/users\/.+/.test(path) && m === 'DELETE') return { module: 'Usuários', action: 'Exclusão', description: 'Usuário excluído' }
+
+  // Analytics / Sites
+  if (path === '/sites' && m === 'POST') return { module: 'Analytics', action: 'Criação', description: 'Site criado' }
+
+  return null
 }
 
 async function apiFetch<T>(
@@ -196,7 +266,18 @@ async function apiFetch<T>(
   // Handle empty responses
   const text = await res.text()
   if (!text) return {} as T
-  return JSON.parse(text) as T
+  const result = JSON.parse(text) as T
+
+  // Fire-and-forget activity log for mutating requests
+  const logInfo = inferLogInfo(options.method || 'GET', path)
+  if (logInfo) {
+    apiFetch('/activity-log', {
+      method: 'POST',
+      body: JSON.stringify(logInfo),
+    }).catch(() => {})
+  }
+
+  return result
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -436,6 +517,17 @@ export const socialApi = {
 
   deleteArt: (id: string) =>
     apiFetch(`/social/arts/${id}`, { method: 'DELETE' }),
+}
+
+// ── Activity Logs ─────────────────────────────────────────────────────────────
+
+export const logsApi = {
+  log: (data: { action: string; module: string; description: string; metadata?: Record<string, unknown> }) =>
+    apiFetch('/activity-log', { method: 'POST', body: JSON.stringify(data) }),
+
+  getLogs: () => apiFetch<{ logs: ActivityLog[] }>('/activity-log'),
+
+  clearLogs: () => apiFetch('/activity-log', { method: 'DELETE' }),
 }
 
 // ── Quotes ────────────────────────────────────────────────────────────────────

@@ -1402,6 +1402,67 @@ app.post("/make-server-cee56a32/upload", async (c) => {
   }
 });
 
+// ─── Activity Log ─────────────────────────────────────────────────────────────
+
+// POST /activity-log — record an action (any authenticated user)
+app.post("/make-server-cee56a32/activity-log", async (c) => {
+  try {
+    const authResult = await requireAuth(c);
+    if (authResult instanceof Response) return authResult;
+    const { user } = authResult;
+    const body = await c.req.json();
+    const { action, module, description, metadata } = body;
+    if (!action || !module) return c.json({ error: "action and module required" }, 400);
+    const now = Date.now();
+    const key = `activity-log:${String(now).padStart(16, '0')}:${user.id}`;
+    await kv.set(key, {
+      id: key,
+      userId: user.id,
+      userEmail: user.email ?? "",
+      userName: user.user_metadata?.name || user.email || "Desconhecido",
+      action,
+      module,
+      description: description || "",
+      metadata: metadata ?? null,
+      createdAt: new Date().toISOString(),
+    });
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("[ActivityLog] POST error:", err);
+    return c.json({ ok: false }, 500);
+  }
+});
+
+// GET /activity-log — list all logs (admin-only)
+app.get("/make-server-cee56a32/activity-log", async (c) => {
+  try {
+    const authResult = await requireAdmin(c);
+    if (authResult instanceof Response) return authResult;
+    const logs = await kv.getByPrefix("activity-log:");
+    logs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return c.json({ logs });
+  } catch (err) {
+    console.error("[ActivityLog] GET error:", err);
+    return c.json({ error: "Erro ao buscar logs" }, 500);
+  }
+});
+
+// DELETE /activity-log — clear all logs (admin-only)
+app.delete("/make-server-cee56a32/activity-log", async (c) => {
+  try {
+    const authResult = await requireAdmin(c);
+    if (authResult instanceof Response) return authResult;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const sb = createClient(supabaseUrl, supabaseKey);
+    await sb.from("kv_store_cee56a32").delete().like("key", "activity-log:%");
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("[ActivityLog] DELETE error:", err);
+    return c.json({ error: "Erro ao limpar logs" }, 500);
+  }
+});
+
 // ────────────────────────────────────────────────────────────────────────────
 
 Deno.serve(app.fetch);

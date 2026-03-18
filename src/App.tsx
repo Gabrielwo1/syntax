@@ -44,6 +44,7 @@ import Repository from './pages/Repository'
 import Users from './pages/Users'
 import SocialMedia from './pages/SocialMedia'
 import Quotes from './pages/Quotes'
+import LogFuncoes from './pages/LogFuncoes'
 
 function LoadingSpinner() {
   return (
@@ -162,6 +163,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute adminOnly>
             <Users />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/log-funcoes"
+        element={
+          <ProtectedRoute adminOnly>
+            <LogFuncoes />
           </ProtectedRoute>
         }
       />

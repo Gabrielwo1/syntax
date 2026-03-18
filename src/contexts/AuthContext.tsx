@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
-import { authApi } from '../lib/api'
+import { authApi, logsApi } from '../lib/api'
 
 interface AuthContextType {
   user: User | null
@@ -52,9 +52,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
+    logsApi.log({ action: 'Login', module: 'Sistema', description: 'Usuário entrou no sistema' }).catch(() => {})
   }
 
   const logout = async () => {
+    logsApi.log({ action: 'Logout', module: 'Sistema', description: 'Usuário saiu do sistema' }).catch(() => {})
     await supabase.auth.signOut()
     setUser(null)
     setSession(null)
