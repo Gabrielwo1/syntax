@@ -4,12 +4,13 @@ import {
   Trash2, Sparkles, Calendar, User, Briefcase, AlertCircle,
   List, LayoutGrid, Search, Tag, Timer, Flag,
   ChevronDown, Hash, FileText, Pencil, Zap, ChevronRight,
+  Paperclip, Upload,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO, isPast, differenceInDays, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { tasksApi, taskSprintsApi } from '../lib/api'
-import type { Task, TaskSprint } from '../lib/api'
+import { tasksApi, taskSprintsApi, authApi, repoApi } from '../lib/api'
+import type { Task, TaskSprint, AppUser } from '../lib/api'
 import { MOCK_TASKS } from '../data/mockData'
 import type { MockTask, TaskPriority, TaskStatus } from '../data/mockData'
 
@@ -28,6 +29,7 @@ interface LocalTask extends Omit<Task, 'status'> {
   completedAt?: string
   createdAt: string
   sprintId?: string
+  attachments?: string[]
 }
 
 function mockToLocal(m: MockTask): LocalTask {
@@ -44,6 +46,7 @@ function mockToLocal(m: MockTask): LocalTask {
     estimatedHours: m.estimatedHours,
     completedAt: m.completedAt,
     createdAt: m.createdAt,
+    attachments: [],
   }
 }
 
@@ -62,6 +65,7 @@ function apiToLocal(t: Task): LocalTask {
     completedAt: undefined,
     createdAt: t.createdAt,
     sprintId: t.sprintId ?? '',
+    attachments: t.attachments ?? [],
   }
 }
 
@@ -154,14 +158,80 @@ function TagInput({ tags, onChange }: { tags: string[]; onChange: (t: string[]) 
   )
 }
 
+// ─── Project Combobox ─────────────────────────────────────────────────────────
+
+function ProjectCombobox({ value, onChange, projects, cls }: {
+  value: string
+  onChange: (v: string) => void
+  projects: string[]
+  cls: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const filtered = projects.filter(p =>
+    value.trim() === '' || p.toLowerCase().includes(value.toLowerCase())
+  )
+  const showCreate = value.trim() !== '' &&
+    !projects.some(p => p.toLowerCase() === value.trim().toLowerCase())
+
+  return (
+    <div ref={ref} className="relative">
+      <input
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        placeholder="Nome do projeto"
+        className={cls}
+        autoComplete="off"
+      />
+      {open && (filtered.length > 0 || showCreate) && (
+        <div className="absolute z-20 top-full mt-1 w-full bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto">
+          {filtered.map(p => (
+            <button
+              key={p}
+              type="button"
+              onMouseDown={() => { onChange(p); setOpen(false) }}
+              className="w-full text-left px-3 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 flex items-center gap-2.5 transition-colors"
+            >
+              <Briefcase className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+              {p}
+            </button>
+          ))}
+          {showCreate && (
+            <button
+              type="button"
+              onMouseDown={() => { onChange(value.trim()); setOpen(false) }}
+              className="w-full text-left px-3 py-2.5 text-sm text-emerald-400 hover:bg-zinc-800 flex items-center gap-2.5 transition-colors border-t border-zinc-800"
+            >
+              <Plus className="w-3.5 h-3.5 shrink-0" />
+              Criar &ldquo;{value.trim()}&rdquo;
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Task Modal ───────────────────────────────────────────────────────────────
 
-function TaskModal({ task, onClose, onSaved, sprints, defaultSprintId }: {
+function TaskModal({ task, onClose, onSaved, sprints, defaultSprintId, users, allProjects }: {
   task?: LocalTask | null
   onClose: () => void
   onSaved: (t: LocalTask) => void
   sprints: TaskSprint[]
   defaultSprintId?: string
+  users: AppUser[]
+  allProjects: string[]
 }) {
   const [form, setForm] = useState<Omit<LocalTask, 'id' | 'createdAt' | 'completedAt'>>({
     name: task?.name ?? '',
@@ -174,7 +244,9 @@ function TaskModal({ task, onClose, onSaved, sprints, defaultSprintId }: {
     tags: task?.tags ?? [],
     estimatedHours: task?.estimatedHours,
     sprintId: task?.sprintId ?? defaultSprintId ?? '',
+    attachments: task?.attachments ?? [],
   })
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm(f => ({ ...f, [k]: v }))
 
@@ -187,6 +259,19 @@ function TaskModal({ task, onClose, onSaved, sprints, defaultSprintId }: {
     if (!form.name.trim()) { toast.error('Nome é obrigatório'); return }
     setLoading(true)
     try {
+      // Upload pending files
+      const uploadedIds: string[] = []
+      for (const file of pendingFiles) {
+        try {
+          const res = await repoApi.upload(file, file.name) as any
+          const id = res?.item?.id || res?.id
+          if (id) uploadedIds.push(id)
+        } catch {
+          toast.error(`Erro ao enviar ${file.name}`)
+        }
+      }
+      const allAttachments = [...(form.attachments || []), ...uploadedIds]
+
       const apiStatus = form.status === 'done' ? 'completed' : form.status as 'not_started' | 'in_progress'
       let saved: Task
       if (task) {
@@ -194,12 +279,14 @@ function TaskModal({ task, onClose, onSaved, sprints, defaultSprintId }: {
           name: form.name, project: form.project || undefined,
           assignee: form.assignee || undefined, due: form.due || undefined,
           status: apiStatus, sprintId: form.sprintId || undefined,
+          attachments: allAttachments.length > 0 ? allAttachments : undefined,
         }) as Task
       } else {
         saved = await tasksApi.createTask({
           name: form.name, project: form.project || undefined,
           assignee: form.assignee || undefined, due: form.due || undefined,
           status: apiStatus, sprintId: form.sprintId || undefined,
+          attachments: allAttachments.length > 0 ? allAttachments : undefined,
         }) as Task
       }
       const local: LocalTask = {
@@ -213,6 +300,7 @@ function TaskModal({ task, onClose, onSaved, sprints, defaultSprintId }: {
         project: form.project,
         assignee: form.assignee,
         sprintId: form.sprintId,
+        attachments: allAttachments,
       }
       toast.success(task ? 'Tarefa atualizada!' : 'Tarefa criada!')
       onSaved(local)
@@ -242,11 +330,30 @@ function TaskModal({ task, onClose, onSaved, sprints, defaultSprintId }: {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Projeto / Cliente</label>
-                <input value={form.project} onChange={e => set('project', e.target.value)} placeholder="Nome do projeto" className={inputCls} />
+                <ProjectCombobox
+                  value={form.project}
+                  onChange={v => set('project', v)}
+                  projects={allProjects}
+                  cls={inputCls}
+                />
               </div>
               <div>
                 <label className={labelCls}>Responsável</label>
-                <input value={form.assignee} onChange={e => set('assignee', e.target.value)} placeholder="Quem vai fazer?" className={inputCls} />
+                {users.length > 0 ? (
+                  <select
+                    value={form.assignee}
+                    onChange={e => set('assignee', e.target.value)}
+                    className={selectCls}
+                  >
+                    <option value="">Selecionar...</option>
+                    {users.map(u => {
+                      const name = u.user_metadata?.name || u.email
+                      return <option key={u.id} value={name}>{name}</option>
+                    })}
+                  </select>
+                ) : (
+                  <input value={form.assignee} onChange={e => set('assignee', e.target.value)} placeholder="Quem vai fazer?" className={inputCls} />
+                )}
               </div>
             </div>
 
@@ -289,6 +396,59 @@ function TaskModal({ task, onClose, onSaved, sprints, defaultSprintId }: {
             <div>
               <label className={labelCls}>Tags</label>
               <TagInput tags={form.tags} onChange={t => set('tags', t)} />
+            </div>
+
+            <div>
+              <label className={labelCls}>Anexos</label>
+              {/* Existing saved attachments */}
+              {(form.attachments || []).length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {form.attachments!.map((id, i) => (
+                    <div key={i} className="flex items-center gap-1.5 text-xs bg-zinc-800 text-zinc-300 border border-zinc-700 px-2.5 py-1.5 rounded-lg">
+                      <FileText className="w-3 h-3 text-zinc-500 shrink-0" />
+                      <span className="max-w-[140px] truncate">{id}</span>
+                      <button
+                        type="button"
+                        onClick={() => set('attachments', form.attachments!.filter((_, idx) => idx !== i))}
+                        className="text-zinc-500 hover:text-rose-400 transition-colors ml-1"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Pending new files */}
+              {pendingFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {pendingFiles.map((f, i) => (
+                    <div key={i} className="flex items-center gap-1.5 text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg">
+                      <Paperclip className="w-3 h-3 shrink-0" />
+                      <span className="max-w-[140px] truncate">{f.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))}
+                        className="text-emerald-500/50 hover:text-rose-400 transition-colors ml-1"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-zinc-500 hover:text-zinc-300 transition-colors border border-dashed border-zinc-700 hover:border-zinc-500 rounded-xl px-4 py-3">
+                <Upload className="w-4 h-4 shrink-0" />
+                <span>Clique para anexar documentos</span>
+                <input
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={e => {
+                    if (e.target.files) setPendingFiles(prev => [...prev, ...Array.from(e.target.files!)])
+                    e.target.value = ''
+                  }}
+                />
+              </label>
             </div>
 
             {sprints.length > 0 && (
@@ -856,6 +1016,7 @@ export default function Tasks() {
   const [showAI, setShowAI] = useState(false)
   const [sprints, setSprints] = useState<TaskSprint[]>([])
   const [activeSprint, setActiveSprint] = useState<string | null>(null)
+  const [users, setUsers] = useState<AppUser[]>([])
 
   useEffect(() => {
     tasksApi.getTasks()
@@ -874,6 +1035,10 @@ export default function Tasks() {
 
     taskSprintsApi.list()
       .then(r => setSprints(r.sprints || []))
+      .catch(() => {})
+
+    authApi.getUsers()
+      .then(r => setUsers(r.users || []))
       .catch(() => {})
   }, [])
 
@@ -898,7 +1063,7 @@ export default function Tasks() {
     }
   }
 
-  const projects = Array.from(new Set(tasks.map(t => t.project).filter(Boolean)))
+  const projects = Array.from(new Set(tasks.map(t => t.project).filter(Boolean))) as string[]
   const assignees = Array.from(new Set(tasks.map(t => t.assignee).filter(Boolean)))
 
   const filtered = tasks.filter(t => {
@@ -1139,6 +1304,8 @@ export default function Tasks() {
           onSaved={handleSaved}
           sprints={sprints}
           defaultSprintId={activeSprint ?? undefined}
+          users={users}
+          allProjects={projects}
         />
       )}
       {showAI && (
