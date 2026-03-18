@@ -3,13 +3,13 @@ import {
   Plus, X, Loader2, Clock, PlayCircle, CheckCircle2,
   Trash2, Sparkles, Calendar, User, Briefcase, AlertCircle,
   List, LayoutGrid, Search, Tag, Timer, Flag,
-  ChevronDown, Hash, FileText, Pencil,
+  ChevronDown, Hash, FileText, Pencil, Zap, ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO, isPast, differenceInDays, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { tasksApi } from '../lib/api'
-import type { Task } from '../lib/api'
+import { tasksApi, taskSprintsApi } from '../lib/api'
+import type { Task, TaskSprint } from '../lib/api'
 import { MOCK_TASKS } from '../data/mockData'
 import type { MockTask, TaskPriority, TaskStatus } from '../data/mockData'
 
@@ -27,6 +27,7 @@ interface LocalTask extends Omit<Task, 'status'> {
   estimatedHours?: number
   completedAt?: string
   createdAt: string
+  sprintId?: string
 }
 
 function mockToLocal(m: MockTask): LocalTask {
@@ -60,6 +61,7 @@ function apiToLocal(t: Task): LocalTask {
     estimatedHours: undefined,
     completedAt: undefined,
     createdAt: t.createdAt,
+    sprintId: t.sprintId ?? '',
   }
 }
 
@@ -154,10 +156,12 @@ function TagInput({ tags, onChange }: { tags: string[]; onChange: (t: string[]) 
 
 // ─── Task Modal ───────────────────────────────────────────────────────────────
 
-function TaskModal({ task, onClose, onSaved }: {
+function TaskModal({ task, onClose, onSaved, sprints, defaultSprintId }: {
   task?: LocalTask | null
   onClose: () => void
   onSaved: (t: LocalTask) => void
+  sprints: TaskSprint[]
+  defaultSprintId?: string
 }) {
   const [form, setForm] = useState<Omit<LocalTask, 'id' | 'createdAt' | 'completedAt'>>({
     name: task?.name ?? '',
@@ -169,6 +173,7 @@ function TaskModal({ task, onClose, onSaved }: {
     assignee: task?.assignee ?? '',
     tags: task?.tags ?? [],
     estimatedHours: task?.estimatedHours,
+    sprintId: task?.sprintId ?? defaultSprintId ?? '',
   })
   const [loading, setLoading] = useState(false)
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm(f => ({ ...f, [k]: v }))
@@ -188,13 +193,13 @@ function TaskModal({ task, onClose, onSaved }: {
         saved = await tasksApi.updateTask(task.id, {
           name: form.name, project: form.project || undefined,
           assignee: form.assignee || undefined, due: form.due || undefined,
-          status: apiStatus,
+          status: apiStatus, sprintId: form.sprintId || undefined,
         }) as Task
       } else {
         saved = await tasksApi.createTask({
           name: form.name, project: form.project || undefined,
           assignee: form.assignee || undefined, due: form.due || undefined,
-          status: apiStatus,
+          status: apiStatus, sprintId: form.sprintId || undefined,
         }) as Task
       }
       const local: LocalTask = {
@@ -207,6 +212,7 @@ function TaskModal({ task, onClose, onSaved }: {
         due: form.due || saved.due || '',
         project: form.project,
         assignee: form.assignee,
+        sprintId: form.sprintId,
       }
       toast.success(task ? 'Tarefa atualizada!' : 'Tarefa criada!')
       onSaved(local)
@@ -284,6 +290,18 @@ function TaskModal({ task, onClose, onSaved }: {
               <label className={labelCls}>Tags</label>
               <TagInput tags={form.tags} onChange={t => set('tags', t)} />
             </div>
+
+            {sprints.length > 0 && (
+              <div>
+                <label className={labelCls}>Sprint</label>
+                <select value={form.sprintId ?? ''} onChange={e => set('sprintId', e.target.value)} className={selectCls}>
+                  <option value="">Sem sprint</option>
+                  {sprints.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="p-5 border-t border-zinc-800 flex justify-end gap-3 bg-zinc-900">
@@ -728,6 +746,101 @@ function KanbanView({ tasks, onSelect }: { tasks: LocalTask[]; onSelect: (t: Loc
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+// ─── Sprint Sidebar ───────────────────────────────────────────────────────────
+
+function SprintSidebar({
+  sprints, activeSprint, onSelect, onCreate, onDelete,
+}: {
+  sprints: TaskSprint[]
+  activeSprint: string | null
+  onSelect: (id: string | null) => void
+  onCreate: (name: string, startDate: string, endDate: string) => void
+  onDelete: (id: string) => void
+}) {
+  const [creating, setCreating] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newStart, setNewStart] = useState('')
+  const [newEnd, setNewEnd] = useState('')
+
+  const handleCreate = () => {
+    if (!newName.trim()) return
+    onCreate(newName.trim(), newStart, newEnd)
+    setNewName(''); setNewStart(''); setNewEnd(''); setCreating(false)
+  }
+
+  return (
+    <div className="w-56 shrink-0 bg-zinc-900 border-r border-zinc-800 flex flex-col">
+      <div className="px-4 py-4 border-b border-zinc-800">
+        <div className="flex items-center gap-2 mb-1">
+          <Zap size={14} className="text-indigo-400" />
+          <span className="text-xs font-bold text-zinc-300 uppercase tracking-widest">Sprint</span>
+        </div>
+        <p className="text-[11px] text-zinc-600">Grupos semanais</p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto py-2 space-y-0.5 px-2">
+        <button
+          onClick={() => onSelect(null)}
+          className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${activeSprint === null ? 'bg-zinc-800 text-zinc-50' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'}`}
+        >
+          <List size={13} />
+          Todos
+        </button>
+
+        {sprints.map(s => (
+          <div key={s.id} className={`group flex items-center gap-1 rounded-lg transition-colors ${activeSprint === s.id ? 'bg-indigo-600/15' : 'hover:bg-zinc-800/50'}`}>
+            <button
+              onClick={() => onSelect(s.id)}
+              className={`flex-1 text-left px-3 py-2 text-sm flex items-center gap-2 ${activeSprint === s.id ? 'text-indigo-300 font-medium' : 'text-zinc-400 hover:text-zinc-200'}`}
+            >
+              <ChevronRight size={12} className={activeSprint === s.id ? 'text-indigo-400' : 'text-zinc-600'} />
+              {s.name}
+            </button>
+            <button
+              onClick={() => onDelete(s.id)}
+              className="opacity-0 group-hover:opacity-100 p-1.5 mr-1 text-zinc-600 hover:text-rose-400 transition-all rounded"
+            >
+              <Trash2 size={11} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="p-3 border-t border-zinc-800">
+        {creating ? (
+          <div className="space-y-2">
+            <input
+              autoFocus
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreate()}
+              placeholder="Nome do sprint..."
+              className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500/50"
+            />
+            <div className="grid grid-cols-2 gap-1.5">
+              <input type="date" value={newStart} onChange={e => setNewStart(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-[10px] text-zinc-300 focus:outline-none focus:border-indigo-500/50" />
+              <input type="date" value={newEnd} onChange={e => setNewEnd(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-[10px] text-zinc-300 focus:outline-none focus:border-indigo-500/50" />
+            </div>
+            <div className="flex gap-1.5">
+              <button onClick={handleCreate} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg py-1.5 transition-colors">Criar</button>
+              <button onClick={() => { setCreating(false); setNewName('') }} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium rounded-lg py-1.5 transition-colors">Cancelar</button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setCreating(true)}
+            className="w-full flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors py-1 px-1"
+          >
+            <Plus size={13} /> Nova Sprint
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
 type GroupBy = 'none' | 'project' | 'assignee'
 
 export default function Tasks() {
@@ -741,6 +854,8 @@ export default function Tasks() {
   const [showModal, setShowModal] = useState(false)
   const [modalTask, setModalTask] = useState<LocalTask | null>(null)
   const [showAI, setShowAI] = useState(false)
+  const [sprints, setSprints] = useState<TaskSprint[]>([])
+  const [activeSprint, setActiveSprint] = useState<string | null>(null)
 
   useEffect(() => {
     tasksApi.getTasks()
@@ -756,7 +871,32 @@ export default function Tasks() {
         toast.error('Usando dados locais')
       })
       .finally(() => setLoading(false))
+
+    taskSprintsApi.list()
+      .then(r => setSprints(r.sprints || []))
+      .catch(() => {})
   }, [])
+
+  const handleCreateSprint = async (name: string, startDate: string, endDate: string) => {
+    try {
+      const r = await taskSprintsApi.create({ name, startDate, endDate })
+      setSprints(prev => [...prev, r.sprint])
+      setActiveSprint(r.sprint.id)
+      toast.success(`Sprint "${name}" criado!`)
+    } catch {
+      toast.error('Erro ao criar sprint')
+    }
+  }
+
+  const handleDeleteSprint = async (id: string) => {
+    try {
+      await taskSprintsApi.delete(id)
+      setSprints(prev => prev.filter(s => s.id !== id))
+      if (activeSprint === id) setActiveSprint(null)
+    } catch {
+      toast.error('Erro ao excluir sprint')
+    }
+  }
 
   const projects = Array.from(new Set(tasks.map(t => t.project).filter(Boolean)))
   const assignees = Array.from(new Set(tasks.map(t => t.assignee).filter(Boolean)))
@@ -765,6 +905,7 @@ export default function Tasks() {
     const q = search.toLowerCase()
     if (q && !t.name.toLowerCase().includes(q) && !t.project.toLowerCase().includes(q)) return false
     if (filterPriority !== 'all' && t.priority !== filterPriority) return false
+    if (activeSprint !== null && t.sprintId !== activeSprint) return false
     return true
   })
 
@@ -803,9 +944,11 @@ export default function Tasks() {
 
   const groupedSections = getGroupedSections()
 
-  const total = tasks.length
-  const inProgress = tasks.filter(t => t.status === 'in_progress').length
-  const done = tasks.filter(t => t.status === 'done').length
+  const displayTasks = activeSprint !== null ? filtered : tasks
+  const total = displayTasks.length
+  const inProgress = displayTasks.filter(t => t.status === 'in_progress').length
+  const done = displayTasks.filter(t => t.status === 'done').length
+  const activeSprintName = activeSprint ? sprints.find(s => s.id === activeSprint)?.name : null
 
   const handleSaved = (task: LocalTask) => {
     setTasks(prev => {
@@ -822,14 +965,30 @@ export default function Tasks() {
   }
 
   return (
-    <div className="min-h-full bg-zinc-950">
+    <div className="min-h-full bg-zinc-950 flex flex-col">
       {/* Header */}
-      <div className="bg-zinc-900 border-b border-zinc-800 px-8 py-6">
-        <h1 className="text-3xl font-bold tracking-tight text-zinc-50">Tarefas</h1>
+      <div className="bg-zinc-900 border-b border-zinc-800 px-8 py-6 shrink-0">
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-50">Tarefas</h1>
+          {activeSprintName && (
+            <span className="inline-flex items-center gap-1.5 bg-indigo-600/15 border border-indigo-500/20 text-indigo-300 text-sm font-medium px-3 py-1 rounded-full">
+              <Zap size={12} /> {activeSprintName}
+            </span>
+          )}
+        </div>
         <p className="text-sm font-medium text-zinc-400 mt-1">Gerencie e acompanhe todas as tarefas da equipe</p>
       </div>
 
-      <div className={`transition-all ${selectedTask ? 'pr-96' : ''}`}>
+      <div className="flex flex-1 overflow-hidden">
+        <SprintSidebar
+          sprints={sprints}
+          activeSprint={activeSprint}
+          onSelect={setActiveSprint}
+          onCreate={handleCreateSprint}
+          onDelete={handleDeleteSprint}
+        />
+
+      <div className={`flex-1 transition-all overflow-auto ${selectedTask ? 'pr-96' : ''}`}>
         <div className="px-8 py-6 space-y-6">
 
           {/* Metric cards */}
@@ -959,6 +1118,8 @@ export default function Tasks() {
         </div>
       </div>
 
+      </div>
+
       {/* Detail Panel */}
       {selectedTask && (
         <DetailPanel
@@ -976,6 +1137,8 @@ export default function Tasks() {
           task={modalTask}
           onClose={() => { setShowModal(false); setModalTask(null) }}
           onSaved={handleSaved}
+          sprints={sprints}
+          defaultSprintId={activeSprint ?? undefined}
         />
       )}
       {showAI && (

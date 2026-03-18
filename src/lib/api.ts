@@ -91,6 +91,15 @@ export interface Task {
   due?: string
   status: 'not_started' | 'in_progress' | 'completed'
   attachments?: string[]
+  sprintId?: string
+  createdAt: string
+}
+
+export interface TaskSprint {
+  id: string
+  name: string
+  startDate?: string
+  endDate?: string
   createdAt: string
 }
 
@@ -429,6 +438,25 @@ export const tasksApi = {
       method: 'POST',
       body: JSON.stringify({ text }),
     }),
+}
+
+export const taskSprintsApi = {
+  list: () => apiFetch<{ sprints: TaskSprint[] }>('/tasks/sprints'),
+
+  create: (data: { name: string; startDate?: string; endDate?: string }) =>
+    apiFetch<{ sprint: TaskSprint }>('/tasks/sprints', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateAll: (sprints: TaskSprint[]) =>
+    apiFetch('/tasks/sprints', {
+      method: 'PUT',
+      body: JSON.stringify({ sprints }),
+    }),
+
+  delete: (id: string) =>
+    apiFetch(`/tasks/sprints/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 }
 
 // ── PDFs ─────────────────────────────────────────────────────────────────────

@@ -973,7 +973,7 @@ app.get("/make-server-cee56a32/tasks", async (c) => {
 app.post("/make-server-cee56a32/tasks", async (c) => {
   try {
     const body = await c.req.json();
-    const { name, project, assignee, due, status, attachments } = body;
+    const { name, project, assignee, due, status, attachments, sprintId } = body;
 
     if (!name) {
       return c.json({ error: "name is required" }, 400);
@@ -988,6 +988,7 @@ app.post("/make-server-cee56a32/tasks", async (c) => {
       due: due || "",
       status: status || "not_started",
       attachments: attachments || [],
+      sprintId: sprintId || "",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -1035,6 +1036,54 @@ app.delete("/make-server-cee56a32/tasks/:id", async (c) => {
   } catch (error) {
     console.error("[Tasks] Error deleting task:", error);
     return c.json({ error: "Failed to delete task", details: String(error) }, 500);
+  }
+});
+
+// ─── TASK SPRINT GROUPS ENDPOINTS ───────────────────────────────────────────
+
+app.get("/make-server-cee56a32/tasks/sprints", async (c) => {
+  try {
+    const sprints = (await kv.get("tasks:sprints")) || [];
+    return c.json({ sprints });
+  } catch (error) {
+    return c.json({ error: "Failed to list sprints", details: String(error) }, 500);
+  }
+});
+
+app.post("/make-server-cee56a32/tasks/sprints", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { name, startDate, endDate } = body;
+    if (!name?.trim()) return c.json({ error: "name is required" }, 400);
+    const id = `sprint:${Date.now()}:${Math.random().toString(36).substr(2, 6)}`;
+    const sprint = { id, name, startDate: startDate || "", endDate: endDate || "", createdAt: new Date().toISOString() };
+    const sprints = (await kv.get("tasks:sprints")) || [];
+    sprints.push(sprint);
+    await kv.set("tasks:sprints", sprints);
+    return c.json({ success: true, sprint });
+  } catch (error) {
+    return c.json({ error: "Failed to create sprint", details: String(error) }, 500);
+  }
+});
+
+app.put("/make-server-cee56a32/tasks/sprints", async (c) => {
+  try {
+    const body = await c.req.json();
+    await kv.set("tasks:sprints", body.sprints || []);
+    return c.json({ success: true });
+  } catch (error) {
+    return c.json({ error: "Failed to update sprints", details: String(error) }, 500);
+  }
+});
+
+app.delete("/make-server-cee56a32/tasks/sprints/:id", async (c) => {
+  try {
+    const id = decodeURIComponent(c.req.param("id"));
+    const sprints = ((await kv.get("tasks:sprints")) || []).filter((s: any) => s.id !== id);
+    await kv.set("tasks:sprints", sprints);
+    return c.json({ success: true });
+  } catch (error) {
+    return c.json({ error: "Failed to delete sprint", details: String(error) }, 500);
   }
 });
 
