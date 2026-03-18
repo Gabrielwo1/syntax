@@ -80,6 +80,7 @@ function NovaModal({ onClose, onCreated }: {
   const [client, setClient] = useState('')
   const [deadline, setDeadline] = useState('')
   const [description, setDescription] = useState('')
+  const [artType, setArtType] = useState('')
   const [loading, setLoading] = useState(false)
 
   const submit = async (e: React.FormEvent) => {
@@ -91,7 +92,7 @@ function NovaModal({ onClose, onCreated }: {
         client,
         format: title,
         deadline: deadline || undefined,
-        description: description || undefined,
+        description: [artType ? `Tipo: ${artType}` : '', description].filter(Boolean).join('\n') || undefined,
       }) as { request: ArtRequest }
       toast.success('Solicitação criada!')
       onCreated(result.request)
@@ -117,6 +118,17 @@ function NovaModal({ onClose, onCreated }: {
           <label className="block text-xs text-zinc-400 mb-1.5">Título *</label>
           <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Post de Lançamento"
             className={inputClass} style={inputStyle} />
+        </div>
+        <div>
+          <label className="block text-xs text-zinc-400 mb-1.5">Tipo da Arte</label>
+          <select value={artType} onChange={e => setArtType(e.target.value)}
+            className={inputClass} style={inputStyle}>
+            <option value="">Selecione o tipo...</option>
+            <option value="Reels">Reels</option>
+            <option value="Estático">Estático</option>
+            <option value="Carrossel">Carrossel</option>
+            <option value="Outro">Outro</option>
+          </select>
         </div>
         <div>
           <label className="block text-xs text-zinc-400 mb-1.5">Cliente *</label>
