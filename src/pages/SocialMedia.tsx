@@ -613,6 +613,17 @@ export default function SocialMedia() {
     }
   }
 
+  const handleDeleteArt = async (id: string) => {
+    if (!confirm('Excluir esta arte entregue?')) return
+    try {
+      await socialApi.deleteArt(id)
+      setDeliveredArts(prev => prev.filter(a => a.id !== id))
+      toast.success('Arte excluída')
+    } catch {
+      toast.error('Erro ao excluir arte')
+    }
+  }
+
   const handleDownload = async (art: DeliveredArtRow) => {
     try {
       let url = artUrls[art.id]
@@ -881,7 +892,7 @@ export default function SocialMedia() {
                         <span className="text-zinc-400">{formatDate(art.createdAt)}</span>
                       </td>
                       <td className={tdCls}>
-                        <div className="flex justify-end">
+                        <div className="flex items-center gap-2 justify-end">
                           <button
                             onClick={() => handleDownload(art)}
                             className="flex items-center gap-1.5 px-3 py-1.5 text-zinc-300 text-xs font-medium rounded-lg transition border border-white/10 hover:bg-white/10 whitespace-nowrap"
@@ -889,6 +900,13 @@ export default function SocialMedia() {
                           >
                             <Download size={12} />
                             Baixar
+                          </button>
+                          <button
+                            onClick={() => handleDeleteArt(art.id)}
+                            className="p-1.5 text-zinc-600 hover:text-rose-400 transition rounded-lg hover:bg-rose-500/10"
+                            title="Excluir arte"
+                          >
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
