@@ -35,6 +35,19 @@ function isOverdue(deadline?: string) {
   catch { return false }
 }
 
+function extractArtType(description?: string): string | null {
+  if (!description) return null
+  const match = description.match(/^Tipo:\s*(.+)/m)
+  return match ? match[1].trim() : null
+}
+
+const ART_TYPE_COLORS: Record<string, string> = {
+  'Reels': 'bg-purple-500/15 text-purple-400 border-purple-500/25',
+  'Estático': 'bg-blue-500/15 text-blue-400 border-blue-500/25',
+  'Carrossel': 'bg-amber-500/15 text-amber-400 border-amber-500/25',
+  'Outro': 'bg-zinc-500/15 text-zinc-400 border-zinc-500/25',
+}
+
 const STATUS_LABELS: Record<string, string> = {
   pendente: 'Solicitado',
   em_andamento: 'Em Andamento',
@@ -695,6 +708,7 @@ export default function SocialMedia() {
               <table className="w-full text-sm border-collapse">
                 <colgroup>
                   <col />
+                  <col style={{ width: '120px' }} />
                   <col style={{ width: '150px' }} />
                   <col style={{ width: '170px' }} />
                   <col style={{ width: '150px' }} />
@@ -703,6 +717,7 @@ export default function SocialMedia() {
                 <thead>
                   <tr className="border-b border-white/[0.07]">
                     <th className={thCls}>Título</th>
+                    <th className={thCls}>Tipo</th>
                     <th className={thCls}>Cliente</th>
                     <th className={thCls}>Data de Entrega</th>
                     <th className={thCls}>Status</th>
@@ -720,6 +735,16 @@ export default function SocialMedia() {
                         {r.description && (
                           <p className="text-xs text-zinc-600 mt-0.5 truncate max-w-xs">{r.description}</p>
                         )}
+                      </td>
+                      <td className={tdCls}>
+                        {(() => {
+                          const t = extractArtType(r.description)
+                          return t ? (
+                            <span className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full border ${ART_TYPE_COLORS[t] ?? ART_TYPE_COLORS['Outro']}`}>
+                              {t}
+                            </span>
+                          ) : <span className="text-zinc-700 text-xs">—</span>
+                        })()}
                       </td>
                       <td className={tdCls}>
                         <span className="text-xs text-zinc-400 font-medium px-2.5 py-1 rounded uppercase tracking-wide"
@@ -797,6 +822,7 @@ export default function SocialMedia() {
                 <colgroup>
                   <col style={{ width: '64px' }} />
                   <col />
+                  <col style={{ width: '120px' }} />
                   <col style={{ width: '150px' }} />
                   <col style={{ width: '170px' }} />
                   <col style={{ width: '130px' }} />
@@ -805,6 +831,7 @@ export default function SocialMedia() {
                   <tr className="border-b border-white/[0.07]">
                     <th className={thCls}>Preview</th>
                     <th className={thCls}>Título</th>
+                    <th className={thCls}>Tipo</th>
                     <th className={thCls}>Cliente</th>
                     <th className={thCls}>Entregue em</th>
                     <th className={`${thCls} text-right`}>Ação</th>
@@ -830,6 +857,17 @@ export default function SocialMedia() {
                         <span className="font-semibold text-white">
                           {art.requestTitle || art.title || '—'}
                         </span>
+                      </td>
+                      <td className={tdCls}>
+                        {(() => {
+                          const req = requests.find(r => r.format === art.requestTitle)
+                          const t = extractArtType(req?.description)
+                          return t ? (
+                            <span className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full border ${ART_TYPE_COLORS[t] ?? ART_TYPE_COLORS['Outro']}`}>
+                              {t}
+                            </span>
+                          ) : <span className="text-zinc-700 text-xs">—</span>
+                        })()}
                       </td>
                       <td className={tdCls}>
                         {art.client ? (
