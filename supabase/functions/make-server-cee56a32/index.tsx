@@ -1825,6 +1825,97 @@ app.delete("/make-server-cee56a32/activity-log", async (c) => {
   }
 });
 
+// ─── COPY MODULE ─────────────────────────────────────────────────────────────
+
+// GET /copy/groups — list all groups with their texts
+app.get("/make-server-cee56a32/copy/groups", async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const { data: groups, error } = await sb.from('copy_groups').select('*').order('created_at', { ascending: true });
+  if (error) return c.json({ error: error.message }, 500);
+  const { data: texts } = await sb.from('copy_texts').select('*').order('created_at', { ascending: true });
+  const result = (groups || []).map((g: any) => ({
+    ...g,
+    texts: (texts || []).filter((t: any) => t.group_id === g.id),
+  }));
+  return c.json({ groups: result });
+});
+
+// POST /copy/groups — create group
+app.post("/make-server-cee56a32/copy/groups", async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const { name } = await c.req.json();
+  if (!name?.trim()) return c.json({ error: 'name obrigatório' }, 400);
+  const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const { data, error } = await sb.from('copy_groups').insert({ name: name.trim() }).select().single();
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json({ group: { ...data, texts: [] } });
+});
+
+// PUT /copy/groups/:id — rename group
+app.put("/make-server-cee56a32/copy/groups/:id", async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const id = c.req.param('id');
+  const { name } = await c.req.json();
+  if (!name?.trim()) return c.json({ error: 'name obrigatório' }, 400);
+  const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const { data, error } = await sb.from('copy_groups').update({ name: name.trim() }).eq('id', id).select().single();
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json({ group: data });
+});
+
+// DELETE /copy/groups/:id
+app.delete("/make-server-cee56a32/copy/groups/:id", async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const id = c.req.param('id');
+  const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const { error } = await sb.from('copy_groups').delete().eq('id', id);
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json({ ok: true });
+});
+
+// POST /copy/texts — add text to group
+app.post("/make-server-cee56a32/copy/texts", async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const { group_id, title, content } = await c.req.json();
+  if (!group_id || !title?.trim() || !content?.trim()) return c.json({ error: 'group_id, title e content obrigatórios' }, 400);
+  const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const { data, error } = await sb.from('copy_texts').insert({ group_id, title: title.trim(), content: content.trim() }).select().single();
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json({ text: data });
+});
+
+// PUT /copy/texts/:id — edit text
+app.put("/make-server-cee56a32/copy/texts/:id", async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const id = c.req.param('id');
+  const { title, content } = await c.req.json();
+  const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const updates: any = {};
+  if (title?.trim()) updates.title = title.trim();
+  if (content?.trim()) updates.content = content.trim();
+  const { data, error } = await sb.from('copy_texts').update(updates).eq('id', id).select().single();
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json({ text: data });
+});
+
+// DELETE /copy/texts/:id
+app.delete("/make-server-cee56a32/copy/texts/:id", async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const id = c.req.param('id');
+  const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const { error } = await sb.from('copy_texts').delete().eq('id', id);
+  if (error) return c.json({ error: error.message }, 500);
+  return c.json({ ok: true });
+});
+
 // ────────────────────────────────────────────────────────────────────────────
 
 Deno.serve(app.fetch);

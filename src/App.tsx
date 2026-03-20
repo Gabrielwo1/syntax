@@ -45,6 +45,7 @@ import Users from './pages/Users'
 import SocialMedia from './pages/SocialMedia'
 import Quotes from './pages/Quotes'
 import LogFuncoes from './pages/LogFuncoes'
+import CopyPage from './pages/Copy'
 
 function LoadingSpinner() {
   return (
@@ -155,6 +156,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Quotes />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/copy"
+        element={
+          <ProtectedRoute>
+            <CopyPage />
           </ProtectedRoute>
         }
       />

@@ -582,3 +582,42 @@ export const quotesApi = {
   delete: (id: string) =>
     apiFetch(`/quotes/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 }
+
+// ── Copy ──────────────────────────────────────────────────────────────────────
+
+export interface CopyText {
+  id: string
+  group_id: string
+  title: string
+  content: string
+  created_at: string
+}
+
+export interface CopyGroup {
+  id: string
+  name: string
+  created_at: string
+  texts: CopyText[]
+}
+
+export const copyApi = {
+  listGroups: () => apiFetch<{ groups: CopyGroup[] }>('/copy/groups'),
+
+  createGroup: (name: string) =>
+    apiFetch<{ group: CopyGroup }>('/copy/groups', { method: 'POST', body: JSON.stringify({ name }) }),
+
+  renameGroup: (id: string, name: string) =>
+    apiFetch<{ group: CopyGroup }>(`/copy/groups/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ name }) }),
+
+  deleteGroup: (id: string) =>
+    apiFetch(`/copy/groups/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  createText: (group_id: string, title: string, content: string) =>
+    apiFetch<{ text: CopyText }>('/copy/texts', { method: 'POST', body: JSON.stringify({ group_id, title, content }) }),
+
+  updateText: (id: string, title: string, content: string) =>
+    apiFetch<{ text: CopyText }>(`/copy/texts/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ title, content }) }),
+
+  deleteText: (id: string) =>
+    apiFetch(`/copy/texts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+}
