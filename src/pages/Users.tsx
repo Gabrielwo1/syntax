@@ -26,6 +26,7 @@ const PERMISSION_LIST = [
   { key: 'social-media', label: 'Social Media' },
   { key: 'orcamento', label: 'Orçamentos' },
   { key: 'copy', label: 'Copy' },
+  { key: 'reunioes', label: 'Reuniões' },
 ]
 
 interface UserFormData {

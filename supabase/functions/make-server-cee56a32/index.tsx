@@ -1916,6 +1916,63 @@ app.delete("/make-server-cee56a32/copy/texts/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+// ─── REUNIÕES ─────────────────────────────────────────────────────────────────
+
+app.get("/make-server-cee56a32/meetings", async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const list = (await kv.get("meetings:list")) || [];
+  if (list.length === 0) return c.json({ meetings: [] });
+  const meetings = (await kv.mget(list)).filter(Boolean);
+  meetings.sort((a: any, b: any) => {
+    const da = `${a.date}T${a.time}`;
+    const db = `${b.date}T${b.time}`;
+    return da.localeCompare(db);
+  });
+  return c.json({ meetings });
+});
+
+app.post("/make-server-cee56a32/meetings", async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const body = await c.req.json();
+  const { title, date, time, notes, createdBy } = body;
+  if (!title?.trim() || !date || !time) return c.json({ error: "title, date e time são obrigatórios" }, 400);
+  const id = `meeting-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const meeting = {
+    id, title: title.trim(), date, time,
+    notes: notes || "", createdBy: createdBy || "",
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+  await kv.set(id, meeting);
+  const list = (await kv.get("meetings:list")) || [];
+  list.push(id);
+  await kv.set("meetings:list", list);
+  return c.json({ meeting });
+});
+
+app.put("/make-server-cee56a32/meetings/:id", async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const id = decodeURIComponent(c.req.param("id"));
+  const existing = await kv.get(id);
+  if (!existing) return c.json({ error: "Reunião não encontrada" }, 404);
+  const body = await c.req.json();
+  const updated = { ...existing, ...body, id, updatedAt: new Date().toISOString() };
+  await kv.set(id, updated);
+  return c.json({ meeting: updated });
+});
+
+app.delete("/make-server-cee56a32/meetings/:id", async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const id = decodeURIComponent(c.req.param("id"));
+  await kv.del(id);
+  const list = ((await kv.get("meetings:list")) || []).filter((mid: string) => mid !== id);
+  await kv.set("meetings:list", list);
+  return c.json({ ok: true });
+});
+
 // ────────────────────────────────────────────────────────────────────────────
 
 Deno.serve(app.fetch);

@@ -169,6 +169,17 @@ export interface ActivityLog {
   createdAt: string
 }
 
+export interface Meeting {
+  id: string
+  title: string
+  date: string
+  time: string
+  notes?: string
+  createdBy?: string
+  createdAt: string
+  updatedAt: string
+}
+
 // ── Core fetch helper ────────────────────────────────────────────────────────
 
 async function getAuthHeaders(isFormData = false): Promise<Record<string, string>> {
@@ -620,4 +631,19 @@ export const copyApi = {
 
   deleteText: (id: string) =>
     apiFetch(`/copy/texts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+}
+
+// ── Reuniões ──────────────────────────────────────────────────────────────────
+
+export const meetingsApi = {
+  list: () => apiFetch<{ meetings: Meeting[] }>('/meetings'),
+
+  create: (data: Omit<Meeting, 'id' | 'createdAt' | 'updatedAt'>) =>
+    apiFetch<{ meeting: Meeting }>('/meetings', { method: 'POST', body: JSON.stringify(data) }),
+
+  update: (id: string, data: Partial<Meeting>) =>
+    apiFetch<{ meeting: Meeting }>(`/meetings/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  delete: (id: string) =>
+    apiFetch(`/meetings/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 }
