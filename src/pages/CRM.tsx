@@ -29,6 +29,7 @@ import { ptBR } from 'date-fns/locale'
 import { crmApi, authApi } from '../lib/api'
 import type { Lead, Folder, AppUser } from '../lib/api'
 import { supabase, SUPABASE_ANON_KEY } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 
 // ─── WhatsApp helpers ─────────────────────────────────────────────────────────
 
@@ -554,6 +555,7 @@ function LeadPanel({ lead, folders, onClose, onUpdated, onDeleted }: {
   const [updatingStage, setUpdatingStage] = useState(false)
   const [systemUsers, setSystemUsers] = useState<AppUser[]>([])
   const [updatingResponsible, setUpdatingResponsible] = useState(false)
+  const { user: currentUser } = useAuth()
 
   useEffect(() => {
     authApi.getUsers().then(r => setSystemUsers(r.users || [])).catch(() => {})
@@ -589,9 +591,11 @@ function LeadPanel({ lead, folders, onClose, onUpdated, onDeleted }: {
   }
 
   const handleStageChange = async (stage: Lead['stage']) => {
+    if (stage === lead.stage) return
     setUpdatingStage(true)
+    const moverName = currentUser?.user_metadata?.name || currentUser?.email || ''
     try {
-      const updated = await crmApi.updateLead(lead.id, { stage }) as Lead
+      const updated = await crmApi.updateLead(lead.id, { stage, movedBy: moverName, movedById: currentUser?.id }) as Lead
       onUpdated(updated)
       toast.success('Estágio atualizado!')
     } catch {
@@ -712,7 +716,13 @@ function LeadPanel({ lead, folders, onClose, onUpdated, onDeleted }: {
             {lead.responsible && (
               <div className="flex items-center gap-2.5 text-sm text-zinc-300">
                 <User size={14} className="text-zinc-500 flex-shrink-0" />
-                <span>{lead.responsible}</span>
+                <span>Responsável: {lead.responsible}</span>
+              </div>
+            )}
+            {(lead as any).movedBy && (
+              <div className="flex items-center gap-2.5 text-sm text-zinc-300">
+                <ChevronRight size={14} className="text-indigo-500 flex-shrink-0" />
+                <span>Movido por: {(lead as any).movedBy}</span>
               </div>
             )}
             {lead.nextFollowUp && (
@@ -975,14 +985,24 @@ export default function CRM() {
                           <button className="w-full text-left" onClick={() => setSelectedLead(lead)}>
                             <div className="flex items-start justify-between gap-2 mb-1">
                               <p className="text-sm font-semibold text-zinc-50 leading-tight">{lead.name}</p>
-                              {lead.responsible && (
-                                <div
-                                  title={lead.responsible}
-                                  className="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-[10px] font-bold text-emerald-400 flex-shrink-0"
-                                >
-                                  {getInitials(lead.responsible)}
-                                </div>
-                              )}
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {(lead as any).movedBy && (
+                                  <div
+                                    title={`Movido por: ${(lead as any).movedBy}`}
+                                    className="w-6 h-6 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-[10px] font-bold text-indigo-400"
+                                  >
+                                    {getInitials((lead as any).movedBy)}
+                                  </div>
+                                )}
+                                {lead.responsible && (
+                                  <div
+                                    title={`Responsável: ${lead.responsible}`}
+                                    className="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-[10px] font-bold text-emerald-400"
+                                  >
+                                    {getInitials(lead.responsible)}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                             {lead.company && <p className="text-xs text-zinc-500 mb-2">{lead.company}</p>}
                             <div className="flex items-center gap-2 flex-wrap">
