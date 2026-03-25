@@ -1,15 +1,202 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import {
   Plus, X, Loader2, Calendar, Clock, Edit2, Trash2, ChevronLeft, ChevronRight, FileText,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, isToday } from 'date-fns'
+import {
+  format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval,
+  isSameDay, isSameMonth, addMonths, subMonths, isToday, parse,
+} from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { meetingsApi } from '../lib/api'
 import type { Meeting } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 
-// ─── Modal de criação / edição ────────────────────────────────────────────────
+// ─── Date Picker ──────────────────────────────────────────────────────────────
+
+const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+
+function DatePicker({
+  value,
+  onChange,
+}: {
+  value: string   // 'yyyy-MM-dd' or ''
+  onChange: (v: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [viewMonth, setViewMonth] = useState(() => value ? parse(value, 'yyyy-MM-dd', new Date()) : new Date())
+  const ref = useRef<HTMLDivElement>(null)
+
+  // close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const monthStart = startOfMonth(viewMonth)
+  const monthEnd = endOfMonth(viewMonth)
+  const days = eachDayOfInterval({ start: monthStart, end: monthEnd })
+  const startPad = monthStart.getDay()
+
+  const displayValue = value
+    ? format(parse(value, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+    : ''
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2.5 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-left focus:outline-none focus:ring-2 focus:ring-emerald-500 hover:border-zinc-600 transition"
+      >
+        <Calendar size={14} className="text-zinc-500 flex-shrink-0" />
+        <span className={value ? 'text-zinc-50' : 'text-zinc-600'}>
+          {displayValue || 'Selecionar data'}
+        </span>
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-3 w-64">
+          {/* Month nav */}
+          <div className="flex items-center justify-between mb-3">
+            <button type="button" onClick={() => setViewMonth(subMonths(viewMonth, 1))} className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-50">
+              <ChevronLeft size={15} />
+            </button>
+            <span className="text-xs font-semibold text-zinc-50 capitalize">
+              {format(viewMonth, 'MMMM yyyy', { locale: ptBR })}
+            </span>
+            <button type="button" onClick={() => setViewMonth(addMonths(viewMonth, 1))} className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-50">
+              <ChevronRight size={15} />
+            </button>
+          </div>
+          {/* Weekday headers */}
+          <div className="grid grid-cols-7 mb-1">
+            {WEEKDAYS.map(d => (
+              <div key={d} className="text-center text-[10px] font-medium text-zinc-600">{d}</div>
+            ))}
+          </div>
+          {/* Days */}
+          <div className="grid grid-cols-7 gap-y-0.5">
+            {Array.from({ length: startPad }).map((_, i) => <div key={`p${i}`} />)}
+            {days.map(day => {
+              const dateStr = format(day, 'yyyy-MM-dd')
+              const isSelected = value === dateStr
+              const today = isToday(day)
+              return (
+                <button
+                  key={dateStr}
+                  type="button"
+                  onClick={() => { onChange(dateStr); setOpen(false) }}
+                  className={`h-7 w-full rounded-lg text-xs font-medium transition
+                    ${isSelected ? 'bg-emerald-600 text-white' : today ? 'bg-zinc-800 text-emerald-400' : 'text-zinc-300 hover:bg-zinc-800'}
+                  `}
+                >
+                  {format(day, 'd')}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Time Picker ──────────────────────────────────────────────────────────────
+
+function TimePicker({
+  value,
+  onChange,
+}: {
+  value: string   // 'HH:mm' or ''
+  onChange: (v: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const [hh, mm] = value ? value.split(':') : ['', '']
+  const [hour, setHour] = useState(hh || '')
+  const [minute, setMinute] = useState(mm || '')
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const commit = (h: string, m: string) => {
+    if (h && m) onChange(`${h}:${m}`)
+  }
+
+  const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
+  const minutes = ['00', '15', '30', '45']
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2.5 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-left focus:outline-none focus:ring-2 focus:ring-emerald-500 hover:border-zinc-600 transition"
+      >
+        <Clock size={14} className="text-zinc-500 flex-shrink-0" />
+        <span className={value ? 'text-zinc-50' : 'text-zinc-600'}>
+          {value || 'Selecionar horário'}
+        </span>
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-3 w-48">
+          <p className="text-[10px] font-medium text-zinc-500 mb-2">HORÁRIO</p>
+          <div className="flex gap-2">
+            {/* Hours */}
+            <div className="flex-1">
+              <p className="text-[10px] text-zinc-600 mb-1 text-center">Hora</p>
+              <div className="overflow-y-auto max-h-40 space-y-0.5 pr-1 scrollbar-thin">
+                {hours.map(h => (
+                  <button
+                    key={h}
+                    type="button"
+                    onClick={() => { setHour(h); commit(h, minute) }}
+                    className={`w-full text-xs py-1 rounded-lg transition font-mono
+                      ${hour === h ? 'bg-emerald-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}
+                    `}
+                  >
+                    {h}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="w-px bg-zinc-800" />
+            {/* Minutes */}
+            <div className="flex-1">
+              <p className="text-[10px] text-zinc-600 mb-1 text-center">Min</p>
+              <div className="space-y-0.5">
+                {minutes.map(m => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => { setMinute(m); commit(hour, m); setOpen(false) }}
+                    className={`w-full text-xs py-1 rounded-lg transition font-mono
+                      ${minute === m ? 'bg-emerald-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}
+                    `}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Modal ────────────────────────────────────────────────────────────────────
 
 function MeetingModal({
   meeting,
@@ -21,29 +208,24 @@ function MeetingModal({
   onSaved: (m: Meeting) => void
 }) {
   const { user } = useAuth()
-  const [form, setForm] = useState({
-    title: meeting?.title || '',
-    date: meeting?.date || '',
-    time: meeting?.time || '',
-    notes: meeting?.notes || '',
-  })
+  const [title, setTitle] = useState(meeting?.title || '')
+  const [date, setDate] = useState(meeting?.date || '')
+  const [time, setTime] = useState(meeting?.time || '')
+  const [notes, setNotes] = useState(meeting?.notes || '')
   const [loading, setLoading] = useState(false)
-
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.title.trim() || !form.date || !form.time) {
-      toast.error('Título, data e horário são obrigatórios')
-      return
-    }
+    if (!title.trim()) { toast.error('Informe o título da reunião'); return }
+    if (!date) { toast.error('Selecione uma data'); return }
+    if (!time) { toast.error('Selecione um horário'); return }
     setLoading(true)
     try {
       const payload = {
-        title: form.title.trim(),
-        date: form.date,
-        time: form.time,
-        notes: form.notes.trim() || undefined,
+        title: title.trim(),
+        date,
+        time,
+        notes: notes.trim() || undefined,
         createdBy: user?.user_metadata?.name || user?.email || undefined,
       }
       let saved: Meeting
@@ -55,8 +237,8 @@ function MeetingModal({
         toast.success('Reunião criada!')
       }
       onSaved(saved)
-    } catch {
-      toast.error('Erro ao salvar reunião')
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao salvar reunião')
     } finally {
       setLoading(false)
     }
@@ -77,52 +259,44 @@ function MeetingModal({
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-1">Título *</label>
             <input
-              value={form.title}
-              onChange={e => set('title', e.target.value)}
+              value={title}
+              onChange={e => setTitle(e.target.value)}
               placeholder="Ex: Reunião com cliente"
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-3 py-2.5 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Data *</label>
-              <input
-                type="date"
-                value={form.date}
-                onChange={e => set('date', e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Horário *</label>
-              <input
-                type="time"
-                value={form.time}
-                onChange={e => set('time', e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-1">Data *</label>
+            <DatePicker value={date} onChange={setDate} />
           </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-1">Horário *</label>
+            <TimePicker value={time} onChange={setTime} />
+          </div>
+
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-1">Observações</label>
             <textarea
-              value={form.notes}
-              onChange={e => set('notes', e.target.value)}
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
               placeholder="Pauta, link de videoconferência, participantes..."
-              rows={4}
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+              rows={3}
+              className="w-full px-3 py-2.5 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
             />
           </div>
+
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-zinc-700 text-zinc-300 text-sm rounded-lg hover:bg-zinc-800 transition">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-zinc-700 text-zinc-300 text-sm rounded-lg hover:bg-zinc-800 transition">
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {loading ? <Loader2 size={14} className="animate-spin" /> : null}
+              {loading && <Loader2 size={14} className="animate-spin" />}
               {meeting ? 'Salvar' : 'Criar Reunião'}
             </button>
           </div>
@@ -132,9 +306,7 @@ function MeetingModal({
   )
 }
 
-// ─── Mini Calendário ──────────────────────────────────────────────────────────
-
-const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+// ─── Mini Calendário lateral ──────────────────────────────────────────────────
 
 function MiniCalendar({
   meetings,
@@ -150,16 +322,11 @@ function MiniCalendar({
   const monthStart = startOfMonth(viewMonth)
   const monthEnd = endOfMonth(viewMonth)
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd })
-
-  // pad start
   const startPad = monthStart.getDay()
-  const padDays = Array.from({ length: startPad })
-
   const meetingDates = new Set(meetings.map(m => m.date))
 
   return (
     <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
-      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <button onClick={() => setViewMonth(subMonths(viewMonth, 1))} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-50 hover:bg-zinc-800">
           <ChevronLeft size={16} />
@@ -171,30 +338,25 @@ function MiniCalendar({
           <ChevronRight size={16} />
         </button>
       </div>
-
-      {/* Weekday headers */}
       <div className="grid grid-cols-7 mb-1">
         {WEEKDAYS.map(d => (
           <div key={d} className="text-center text-[10px] font-medium text-zinc-500 py-1">{d}</div>
         ))}
       </div>
-
-      {/* Days */}
       <div className="grid grid-cols-7 gap-y-1">
-        {padDays.map((_, i) => <div key={`pad-${i}`} />)}
+        {Array.from({ length: startPad }).map((_, i) => <div key={`pad-${i}`} />)}
         {days.map(day => {
           const dateStr = format(day, 'yyyy-MM-dd')
           const hasMeeting = meetingDates.has(dateStr)
           const isSelected = selectedDate ? isSameDay(day, selectedDate) : false
           const todayDay = isToday(day)
-          const inMonth = isSameMonth(day, viewMonth)
 
           return (
             <button
               key={dateStr}
               onClick={() => onSelectDate(isSelected ? null : day)}
               className={`relative flex flex-col items-center justify-center h-8 w-full rounded-lg text-xs font-medium transition
-                ${isSelected ? 'bg-emerald-600 text-white' : todayDay ? 'bg-zinc-800 text-emerald-400' : inMonth ? 'text-zinc-300 hover:bg-zinc-800' : 'text-zinc-600'}
+                ${isSelected ? 'bg-emerald-600 text-white' : todayDay ? 'bg-zinc-800 text-emerald-400' : isSameMonth(day, viewMonth) ? 'text-zinc-300 hover:bg-zinc-800' : 'text-zinc-600'}
               `}
             >
               {format(day, 'd')}
@@ -205,13 +367,9 @@ function MiniCalendar({
           )
         })}
       </div>
-
       {selectedDate && (
-        <button
-          onClick={() => onSelectDate(null)}
-          className="mt-3 w-full text-xs text-zinc-500 hover:text-zinc-300 transition"
-        >
-          Limpar filtro de data
+        <button onClick={() => onSelectDate(null)} className="mt-3 w-full text-xs text-zinc-500 hover:text-zinc-300 transition">
+          Limpar filtro
         </button>
       )}
     </div>
@@ -256,11 +414,7 @@ export default function Meetings() {
     }
   }
 
-  const sorted = [...meetings].sort((a, b) => {
-    const da = `${a.date}T${a.time}`
-    const db = `${b.date}T${b.time}`
-    return da.localeCompare(db)
-  })
+  const sorted = [...meetings].sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))
 
   const filtered = selectedDate
     ? sorted.filter(m => m.date === format(selectedDate, 'yyyy-MM-dd'))
@@ -272,11 +426,12 @@ export default function Meetings() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-zinc-50">Reuniões</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">{meetings.length} reunião{meetings.length !== 1 ? 'ões' : ''} agendada{meetings.length !== 1 ? 's' : ''}</p>
+          <p className="text-sm text-zinc-500 mt-0.5">
+            {meetings.length} reunião{meetings.length !== 1 ? 'ões' : ''} agendada{meetings.length !== 1 ? 's' : ''}
+          </p>
         </div>
         <button
           onClick={() => setShowModal(true)}
@@ -289,17 +444,12 @@ export default function Meetings() {
 
       <div className="flex gap-6 items-start">
         {/* Calendar sidebar */}
-        <div className="w-64 flex-shrink-0">
-          <MiniCalendar
-            meetings={meetings}
-            selectedDate={selectedDate}
-            onSelectDate={setSelectedDate}
-          />
-
+        <div className="w-64 flex-shrink-0 space-y-3">
+          <MiniCalendar meetings={meetings} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
           {selectedDate && (
-            <div className="mt-3 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+            <div className="px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
               <p className="text-xs text-emerald-400 font-medium">
-                Filtrando: {formatDisplayDate(format(selectedDate, 'yyyy-MM-dd'))}
+                {formatDisplayDate(format(selectedDate, 'yyyy-MM-dd'))}
               </p>
               <p className="text-xs text-zinc-500 mt-0.5">{filtered.length} reunião(ões)</p>
             </div>
@@ -319,10 +469,7 @@ export default function Meetings() {
                 {selectedDate ? 'Nenhuma reunião neste dia' : 'Nenhuma reunião agendada'}
               </p>
               {!selectedDate && (
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="mt-3 text-xs text-emerald-500 hover:text-emerald-400 transition"
-                >
+                <button onClick={() => setShowModal(true)} className="mt-3 text-xs text-emerald-500 hover:text-emerald-400 transition">
                   + Criar primeira reunião
                 </button>
               )}
@@ -384,10 +531,7 @@ export default function Meetings() {
                             </button>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => setDeletingId(m.id)}
-                            className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10"
-                          >
+                          <button onClick={() => setDeletingId(m.id)} className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10">
                             <Trash2 size={14} />
                           </button>
                         )}
