@@ -26,8 +26,8 @@ import {
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { crmApi } from '../lib/api'
-import type { Lead, Folder } from '../lib/api'
+import { crmApi, authApi } from '../lib/api'
+import type { Lead, Folder, AppUser } from '../lib/api'
 import { supabase, SUPABASE_ANON_KEY } from '../lib/supabase'
 
 // ─── WhatsApp helpers ─────────────────────────────────────────────────────────
@@ -353,6 +353,13 @@ function formatDate(dateStr?: string) {
   try { return format(parseISO(dateStr), 'dd/MM/yyyy', { locale: ptBR }) } catch { return dateStr }
 }
 
+function getInitials(name?: string | null): string {
+  if (!name) return ''
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
+}
+
 function StageBadge({ stage }: { stage: Lead['stage'] }) {
   const s = STAGES.find(st => st.key === stage)
   if (!s) return null
@@ -545,6 +552,26 @@ function LeadPanel({ lead, folders, onClose, onUpdated, onDeleted }: {
   const [editing, setEditing] = useState(false)
   const [deletingConfirm, setDeletingConfirm] = useState(false)
   const [updatingStage, setUpdatingStage] = useState(false)
+  const [systemUsers, setSystemUsers] = useState<AppUser[]>([])
+  const [updatingResponsible, setUpdatingResponsible] = useState(false)
+
+  useEffect(() => {
+    authApi.getUsers().then(r => setSystemUsers(r.users || [])).catch(() => {})
+  }, [])
+
+  const handleResponsibleChange = async (userId: string) => {
+    const user = systemUsers.find(u => u.id === userId)
+    const name = user ? (user.user_metadata?.name || user.email) : ''
+    setUpdatingResponsible(true)
+    try {
+      const updated = await crmApi.updateLead(lead.id, { responsible: name, responsibleUserId: userId || undefined }) as Lead
+      onUpdated(updated)
+    } catch {
+      toast.error('Erro ao atualizar responsável')
+    } finally {
+      setUpdatingResponsible(false)
+    }
+  }
 
   const handleAddNote = async () => {
     if (!activityNote.trim()) return
@@ -624,6 +651,29 @@ function LeadPanel({ lead, folders, onClose, onUpdated, onDeleted }: {
                   {s.label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Responsible user selector */}
+          <div>
+            <p className="text-xs font-medium text-zinc-400 mb-2">RESPONSÁVEL</p>
+            <div className="relative">
+              <select
+                value={(lead as any).responsibleUserId || ''}
+                onChange={e => handleResponsibleChange(e.target.value)}
+                disabled={updatingResponsible}
+                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 appearance-none disabled:opacity-60"
+              >
+                <option value="">— Nenhum —</option>
+                {systemUsers.map(u => (
+                  <option key={u.id} value={u.id}>
+                    {u.user_metadata?.name || u.email}
+                  </option>
+                ))}
+              </select>
+              {updatingResponsible && (
+                <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-zinc-400" />
+              )}
             </div>
           </div>
 
@@ -923,7 +973,17 @@ export default function CRM() {
                           className="w-full text-left bg-zinc-900 rounded-xl border border-zinc-800 p-3.5 shadow-sm hover:shadow-md hover:border-emerald-700 transition-all duration-150"
                         >
                           <button className="w-full text-left" onClick={() => setSelectedLead(lead)}>
-                            <p className="text-sm font-semibold text-zinc-50 mb-1">{lead.name}</p>
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <p className="text-sm font-semibold text-zinc-50 leading-tight">{lead.name}</p>
+                              {lead.responsible && (
+                                <div
+                                  title={lead.responsible}
+                                  className="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-[10px] font-bold text-emerald-400 flex-shrink-0"
+                                >
+                                  {getInitials(lead.responsible)}
+                                </div>
+                              )}
+                            </div>
                             {lead.company && <p className="text-xs text-zinc-500 mb-2">{lead.company}</p>}
                             <div className="flex items-center gap-2 flex-wrap">
                               {lead.priority && <PriorityBadge priority={lead.priority} />}
