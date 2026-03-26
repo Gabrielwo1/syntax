@@ -83,13 +83,11 @@ function QuotePreview({ quote }: { quote: Quote }) {
       <div className="flex items-start justify-between mb-10 pb-8 border-b border-zinc-800 print:border-zinc-300">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center print:bg-emerald-600">
-              <span className="text-white font-black text-lg">S</span>
-            </div>
-            <div>
-              <p className="text-white font-black text-xl tracking-tight print:text-black">Syntax</p>
-              <p className="text-zinc-500 text-xs print:text-zinc-600">Agência Digital & Desenvolvimento</p>
-            </div>
+            <img
+              src="/logo-syntax.png"
+              alt="Syntax"
+              className="h-12 w-auto object-contain"
+            />
           </div>
         </div>
         <div className="text-right">
