@@ -566,8 +566,8 @@ function LeadPanel({ lead, folders, onClose, onUpdated, onDeleted }: {
     const name = user ? (user.user_metadata?.name || user.email) : ''
     setUpdatingResponsible(true)
     try {
-      const updated = await crmApi.updateLead(lead.id, { responsible: name, responsibleUserId: userId || undefined }) as Lead
-      onUpdated(updated)
+      const res = await crmApi.updateLead(lead.id, { responsible: name, responsibleUserId: userId || undefined })
+      onUpdated((res as any).lead ?? res)
     } catch {
       toast.error('Erro ao atualizar responsável')
     } finally {
@@ -579,8 +579,8 @@ function LeadPanel({ lead, folders, onClose, onUpdated, onDeleted }: {
     if (!activityNote.trim()) return
     setAddingNote(true)
     try {
-      const updated = await crmApi.updateLead(lead.id, { activityNote }) as Lead
-      onUpdated(updated)
+      const res = await crmApi.updateLead(lead.id, { activityNote })
+      onUpdated((res as any).lead ?? res)
       setActivityNote('')
       toast.success('Nota adicionada!')
     } catch {
@@ -595,8 +595,8 @@ function LeadPanel({ lead, folders, onClose, onUpdated, onDeleted }: {
     setUpdatingStage(true)
     const moverName = currentUser?.user_metadata?.name || currentUser?.email || ''
     try {
-      const updated = await crmApi.updateLead(lead.id, { stage, movedBy: moverName, movedById: currentUser?.id }) as Lead
-      onUpdated(updated)
+      const res = await crmApi.updateLead(lead.id, { stage, movedBy: moverName, movedById: currentUser?.id })
+      onUpdated((res as any).lead ?? res)
       toast.success('Estágio atualizado!')
     } catch {
       toast.error('Erro ao atualizar estágio')
@@ -767,12 +767,12 @@ function LeadPanel({ lead, folders, onClose, onUpdated, onDeleted }: {
             <p className="text-xs font-medium text-zinc-400 mb-3">ATIVIDADES</p>
             {lead.activities && lead.activities.length > 0 ? (
               <div className="space-y-3 mb-3">
-                {lead.activities.map(a => (
-                  <div key={a.id} className="flex gap-3">
+                {lead.activities.map((a, i) => (
+                  <div key={i} className="flex gap-3">
                     <div className="w-2 h-2 rounded-full bg-indigo-400 mt-2 flex-shrink-0" />
                     <div className="flex-1 bg-zinc-950 rounded-lg p-3">
-                      <p className="text-sm text-zinc-100 whitespace-pre-wrap">{a.note}</p>
-                      <p className="text-xs text-zinc-500 mt-1">{formatDate(a.createdAt)}</p>
+                      <p className="text-sm text-zinc-100 whitespace-pre-wrap">{a.text || a.note || (a.type === 'stage_change' ? `${a.from} → ${a.to}` : '')}</p>
+                      <p className="text-xs text-zinc-500 mt-1">{formatDate(a.at || a.createdAt)}</p>
                     </div>
                   </div>
                 ))}

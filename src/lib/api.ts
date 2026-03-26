@@ -56,10 +56,13 @@ export interface Lead {
 }
 
 export interface Activity {
-  id: string
-  note: string
-  createdAt: string
-  user?: string
+  type: 'note' | 'stage_change'
+  text?: string
+  note?: string
+  from?: string
+  to?: string
+  at: string
+  createdAt?: string
 }
 
 export interface Folder {
