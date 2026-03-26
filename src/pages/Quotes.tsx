@@ -80,19 +80,16 @@ function QuotePreview({ quote }: { quote: Quote }) {
       className="bg-zinc-900 border border-zinc-800 rounded-2xl min-h-[842px] p-12 shadow-2xl shadow-black/30 print:shadow-none print:border-0 print:rounded-none print:p-16 print:bg-white print:text-black"
     >
       {/* Letterhead */}
-      <div className="flex items-start justify-between mb-10 pb-8 border-b border-zinc-800 print:border-zinc-300">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <img
-              src="/logo-syntax.png"
-              alt="Syntax"
-              className="h-12 w-auto object-contain"
-            />
-          </div>
-        </div>
+      <div className="flex items-center justify-between mb-10 pb-8 border-b border-zinc-700 print:border-zinc-300">
+        <img
+          src="/logo-syntax.png"
+          alt="Syntax"
+          className="h-10 w-auto object-contain"
+          style={{ maxWidth: 200 }}
+        />
         <div className="text-right">
           <p className="text-zinc-500 text-xs uppercase tracking-widest mb-1 print:text-zinc-500">PROPOSTA COMERCIAL</p>
-          <p className="text-emerald-400 font-bold text-lg print:text-emerald-600">{quote.number || '—'}</p>
+          <p className="text-emerald-400 font-bold text-2xl print:text-emerald-600">{quote.number || '—'}</p>
           <p className="text-zinc-500 text-xs mt-1 print:text-zinc-500">Data: {fmtDate(new Date().toISOString())}</p>
         </div>
       </div>
