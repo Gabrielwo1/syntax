@@ -77,10 +77,10 @@ function QuotePreview({ quote }: { quote: Quote }) {
   return (
     <div
       id="quote-preview"
-      className="bg-zinc-900 border border-zinc-800 rounded-2xl min-h-[842px] p-12 shadow-2xl shadow-black/30 print:shadow-none print:border-0 print:rounded-none print:p-16 print:bg-white print:text-black"
+      className="bg-zinc-900 border border-zinc-800 rounded-2xl min-h-[842px] p-12 shadow-2xl shadow-black/30 print:shadow-none print:border-0 print:rounded-none print:min-h-0 print:p-16"
     >
       {/* Letterhead */}
-      <div className="flex items-center justify-between mb-10 pb-8 border-b border-zinc-700 print:border-zinc-300">
+      <div className="flex items-center justify-between mb-10 pb-8 border-b border-zinc-700">
         <img
           src="/logo-syntax.png"
           alt="Syntax"
@@ -88,26 +88,26 @@ function QuotePreview({ quote }: { quote: Quote }) {
           style={{ maxWidth: 200 }}
         />
         <div className="text-right">
-          <p className="text-zinc-500 text-xs uppercase tracking-widest mb-1 print:text-zinc-500">PROPOSTA COMERCIAL</p>
-          <p className="text-emerald-400 font-bold text-2xl print:text-emerald-600">{quote.number || '—'}</p>
-          <p className="text-zinc-500 text-xs mt-1 print:text-zinc-500">Data: {fmtDate(new Date().toISOString())}</p>
+          <p className="text-zinc-500 text-xs uppercase tracking-widest mb-1">PROPOSTA COMERCIAL</p>
+          <p className="text-emerald-400 font-bold text-2xl">{quote.number || '—'}</p>
+          <p className="text-zinc-500 text-xs mt-1">Data: {fmtDate(new Date().toISOString())}</p>
         </div>
       </div>
 
       {/* Client */}
       <div className="mb-10">
-        <p className="text-zinc-500 text-xs uppercase tracking-widest mb-2 print:text-zinc-500">PREPARADO PARA</p>
-        <p className="text-2xl font-bold text-emerald-400 leading-tight print:text-emerald-600">
+        <p className="text-zinc-500 text-xs uppercase tracking-widest mb-2">PREPARADO PARA</p>
+        <p className="text-2xl font-bold text-emerald-400 leading-tight">
           {quote.client || 'Nome do Cliente'}
         </p>
         <div className="flex flex-wrap gap-4 mt-2">
           {quote.clientEmail && (
-            <span className="text-sm text-zinc-400 flex items-center gap-1.5 print:text-zinc-600">
+            <span className="text-sm text-zinc-400 flex items-center gap-1.5">
               <Mail className="w-3.5 h-3.5" />{quote.clientEmail}
             </span>
           )}
           {quote.clientPhone && (
-            <span className="text-sm text-zinc-400 flex items-center gap-1.5 print:text-zinc-600">
+            <span className="text-sm text-zinc-400 flex items-center gap-1.5">
               <Phone className="w-3.5 h-3.5" />{quote.clientPhone}
             </span>
           )}
@@ -116,15 +116,15 @@ function QuotePreview({ quote }: { quote: Quote }) {
 
       {/* Items table */}
       <div className="mb-8">
-        <p className="text-zinc-500 text-xs uppercase tracking-widest mb-3 print:text-zinc-500">ITENS DO PROJETO</p>
-        <div className="rounded-xl overflow-hidden border border-zinc-800 print:border-zinc-300">
+        <p className="text-zinc-500 text-xs uppercase tracking-widest mb-3">ITENS DO PROJETO</p>
+        <div className="rounded-xl overflow-hidden border border-zinc-800">
           <table className="w-full text-sm border-collapse">
             <thead>
-              <tr className="bg-zinc-800/60 print:bg-zinc-100">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wide print:text-zinc-600">Descrição</th>
-                <th className="text-center px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wide print:text-zinc-600 w-16">Qtd</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wide print:text-zinc-600">Unitário</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wide print:text-zinc-600">Total</th>
+              <tr className="bg-zinc-800/60">
+                <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wide">Descrição</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wide w-16">Qtd</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wide">Unitário</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wide">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -136,11 +136,11 @@ function QuotePreview({ quote }: { quote: Quote }) {
                 </tr>
               ) : (
                 quote.items.map((item, i) => (
-                  <tr key={item.id} className={`border-t border-zinc-800 print:border-zinc-200 ${i % 2 === 1 ? 'bg-zinc-800/20 print:bg-zinc-50' : ''}`}>
-                    <td className="px-4 py-3 text-zinc-100 font-medium print:text-zinc-800">{item.description}</td>
-                    <td className="px-4 py-3 text-center text-zinc-400 print:text-zinc-600">{item.quantity}</td>
-                    <td className="px-4 py-3 text-right text-zinc-400 print:text-zinc-600">{fmtMoney(item.unitPrice)}</td>
-                    <td className="px-4 py-3 text-right text-zinc-100 font-semibold print:text-zinc-800">{fmtMoney(item.total)}</td>
+                  <tr key={item.id} className={`border-t border-zinc-800 ${i % 2 === 1 ? 'bg-zinc-800/20' : ''}`}>
+                    <td className="px-4 py-3 text-zinc-100 font-medium">{item.description}</td>
+                    <td className="px-4 py-3 text-center text-zinc-400">{item.quantity}</td>
+                    <td className="px-4 py-3 text-right text-zinc-400">{fmtMoney(item.unitPrice)}</td>
+                    <td className="px-4 py-3 text-right text-zinc-100 font-semibold">{fmtMoney(item.total)}</td>
                   </tr>
                 ))
               )}
@@ -152,18 +152,18 @@ function QuotePreview({ quote }: { quote: Quote }) {
         <div className="mt-4 flex justify-end">
           <div className="w-64 space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-zinc-400 print:text-zinc-600">Subtotal</span>
-              <span className="text-zinc-200 font-medium print:text-zinc-800">{fmtMoney(subtotal)}</span>
+              <span className="text-zinc-400">Subtotal</span>
+              <span className="text-zinc-200 font-medium">{fmtMoney(subtotal)}</span>
             </div>
             {quote.discount > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-zinc-400 print:text-zinc-600">Desconto ({quote.discount}%)</span>
+                <span className="text-zinc-400">Desconto ({quote.discount}%)</span>
                 <span className="text-rose-400 font-medium">−{fmtMoney(discountVal)}</span>
               </div>
             )}
-            <div className="flex justify-between pt-2 border-t border-zinc-700 print:border-zinc-300">
-              <span className="text-zinc-50 font-bold print:text-zinc-900">TOTAL</span>
-              <span className="text-emerald-400 font-black text-lg print:text-emerald-600">{fmtMoney(total)}</span>
+            <div className="flex justify-between pt-2 border-t border-zinc-700">
+              <span className="text-zinc-50 font-bold">TOTAL</span>
+              <span className="text-emerald-400 font-black text-lg">{fmtMoney(total)}</span>
             </div>
           </div>
         </div>
@@ -171,22 +171,22 @@ function QuotePreview({ quote }: { quote: Quote }) {
 
       {/* Terms */}
       <div className="grid grid-cols-2 gap-6 mb-8">
-        <div className="bg-zinc-800/40 print:bg-zinc-50 rounded-xl p-4 border border-zinc-800 print:border-zinc-200">
-          <p className="text-zinc-500 text-xs uppercase tracking-widest mb-2 print:text-zinc-500">PRAZO & ENTREGA</p>
-          <div className="flex items-center gap-2 text-sm text-zinc-200 print:text-zinc-800 mb-1">
+        <div className="bg-zinc-800/40 rounded-xl p-4 border border-zinc-800">
+          <p className="text-zinc-500 text-xs uppercase tracking-widest mb-2">PRAZO & ENTREGA</p>
+          <div className="flex items-center gap-2 text-sm text-zinc-200 mb-1">
             <Calendar className="w-4 h-4 text-zinc-500" />
             <span>{quote.deliveryDays ? `${quote.deliveryDays} dias úteis` : '—'}</span>
           </div>
           {quote.validUntil && (
-            <div className="flex items-center gap-2 text-xs text-zinc-500 print:text-zinc-500">
+            <div className="flex items-center gap-2 text-xs text-zinc-500">
               <Clock className="w-3.5 h-3.5" />
               <span>Válido até {fmtDate(quote.validUntil)}</span>
             </div>
           )}
         </div>
-        <div className="bg-zinc-800/40 print:bg-zinc-50 rounded-xl p-4 border border-zinc-800 print:border-zinc-200">
-          <p className="text-zinc-500 text-xs uppercase tracking-widest mb-2 print:text-zinc-500">PAGAMENTO</p>
-          <div className="flex items-center gap-2 text-sm text-zinc-200 print:text-zinc-800">
+        <div className="bg-zinc-800/40 rounded-xl p-4 border border-zinc-800">
+          <p className="text-zinc-500 text-xs uppercase tracking-widest mb-2">PAGAMENTO</p>
+          <div className="flex items-center gap-2 text-sm text-zinc-200">
             <CreditCard className="w-4 h-4 text-zinc-500" />
             <span>{(PAYMENT_OPTIONS.find(o => o.value === quote.paymentTerms)?.label ?? quote.paymentTerms) || '—'}</span>
           </div>
@@ -195,19 +195,19 @@ function QuotePreview({ quote }: { quote: Quote }) {
 
       {/* Notes */}
       {quote.notes && (
-        <div className="mb-8 bg-zinc-800/30 print:bg-zinc-50 rounded-xl p-4 border border-zinc-800 print:border-zinc-200">
-          <p className="text-zinc-500 text-xs uppercase tracking-widest mb-2 print:text-zinc-500">OBSERVAÇÕES</p>
-          <p className="text-sm text-zinc-300 leading-relaxed print:text-zinc-700">{quote.notes}</p>
+        <div className="mb-8 bg-zinc-800/30 rounded-xl p-4 border border-zinc-800">
+          <p className="text-zinc-500 text-xs uppercase tracking-widest mb-2">OBSERVAÇÕES</p>
+          <p className="text-sm text-zinc-300 leading-relaxed">{quote.notes}</p>
         </div>
       )}
 
       {/* Footer / Signature */}
-      <div className="pt-8 border-t border-zinc-800 print:border-zinc-300 flex items-end justify-between">
+      <div className="pt-8 border-t border-zinc-800 flex items-end justify-between">
         <div>
-          <div className="w-32 h-px bg-zinc-600 print:bg-zinc-400 mb-1" />
-          <p className="text-xs text-zinc-500 print:text-zinc-500">Syntax — Agência Digital</p>
+          <div className="w-32 h-px bg-zinc-600 mb-1" />
+          <p className="text-xs text-zinc-500">Syntax — Agência Digital</p>
         </div>
-        <p className="text-xs text-zinc-600 print:text-zinc-400">
+        <p className="text-xs text-zinc-600">
           Esta proposta é válida até {fmtDate(quote.validUntil) !== '—' ? fmtDate(quote.validUntil) : '—'}
         </p>
       </div>
