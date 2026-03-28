@@ -23,7 +23,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { format, parseISO, isToday, startOfWeek, isAfter } from 'date-fns'
+import { format, parseISO, isToday, startOfWeek, startOfMonth, isAfter } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { crmApi, financeiroApi, tasksApi, sitesApi } from '../lib/api'
 import type { Lead, FinancialEntry, Task, Site } from '../lib/api'
@@ -79,7 +79,7 @@ function getInitials(name?: string | null): string {
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
 }
 
-type LeaderboardPeriod = 'hoje' | 'semana'
+type LeaderboardPeriod = 'hoje' | 'semana' | 'mes' | 'total'
 
 interface RankEntry {
   name: string
@@ -141,16 +141,23 @@ export default function Dashboard() {
 
   // Build leaderboard from lead.movedBy + lead.updatedAt (same source as CRM card avatars)
   const weekStart = startOfWeek(new Date(), { locale: ptBR })
+  const monthStart = startOfMonth(new Date())
   const moveCount: Record<string, number> = {}
   leads.forEach(lead => {
     if (!lead.movedBy) return
     const ts = lead.updatedAt || lead.createdAt
-    if (!ts) return
     let include = false
-    try {
-      const d = parseISO(ts)
-      include = lbPeriod === 'hoje' ? isToday(d) : isAfter(d, weekStart)
-    } catch { return }
+    if (lbPeriod === 'total') {
+      include = true
+    } else {
+      if (!ts) return
+      try {
+        const d = parseISO(ts)
+        if (lbPeriod === 'hoje') include = isToday(d)
+        else if (lbPeriod === 'semana') include = isAfter(d, weekStart)
+        else if (lbPeriod === 'mes') include = isAfter(d, monthStart)
+      } catch { return }
+    }
     if (include) moveCount[lead.movedBy] = (moveCount[lead.movedBy] || 0) + 1
   })
   const leaderboard: RankEntry[] = Object.entries(moveCount)
@@ -239,24 +246,21 @@ export default function Dashboard() {
                   <span className="text-zinc-500 text-xs">— leads movimentados</span>
                 </div>
                 <div className="flex rounded-lg border border-zinc-700 overflow-hidden text-xs font-medium">
-                  <button
-                    onClick={() => setLbPeriod('hoje')}
-                    className={`px-3 py-1.5 transition-colors ${lbPeriod === 'hoje' ? 'bg-emerald-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                  >
-                    Hoje
-                  </button>
-                  <button
-                    onClick={() => setLbPeriod('semana')}
-                    className={`px-3 py-1.5 transition-colors ${lbPeriod === 'semana' ? 'bg-emerald-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                  >
-                    Esta semana
-                  </button>
+                  {(['hoje', 'semana', 'mes', 'total'] as LeaderboardPeriod[]).map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setLbPeriod(p)}
+                      className={`px-3 py-1.5 transition-colors ${lbPeriod === p ? 'bg-emerald-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                    >
+                      {p === 'hoje' ? 'Hoje' : p === 'semana' ? 'Semana' : p === 'mes' ? 'Mês' : 'Total'}
+                    </button>
+                  ))}
                 </div>
               </div>
 
               {leaderboard.length === 0 ? (
                 <p className="text-zinc-500 text-sm text-center py-6">
-                  Nenhuma movimentação {lbPeriod === 'hoje' ? 'hoje' : 'esta semana'}.
+                  Nenhuma movimentação {lbPeriod === 'hoje' ? 'hoje' : lbPeriod === 'semana' ? 'esta semana' : lbPeriod === 'mes' ? 'este mês' : 'registrada'}.
                 </p>
               ) : (
                 <div className="flex flex-wrap gap-4">
