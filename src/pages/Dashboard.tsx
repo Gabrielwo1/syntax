@@ -72,6 +72,13 @@ function formatCurrency(val: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
 }
 
+function getInitials(name?: string | null): string {
+  if (!name) return '?'
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
+}
+
 type LeaderboardPeriod = 'hoje' | 'semana'
 
 interface RankEntry {
@@ -228,11 +235,11 @@ export default function Dashboard() {
           {/* CRM Leaderboard */}
           {canAccess('crm') && (
             <div className="bg-zinc-900 rounded-xl p-5 border border-zinc-800 shadow-xl shadow-black/10 mb-7">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2">
                   <Trophy size={18} className="text-amber-400" />
                   <h3 className="font-semibold text-zinc-50">Ranking CRM</h3>
-                  <span className="text-zinc-500 text-xs">— movimentações de leads</span>
+                  <span className="text-zinc-500 text-xs">— leads movimentados</span>
                 </div>
                 <div className="flex rounded-lg border border-zinc-700 overflow-hidden text-xs font-medium">
                   <button
@@ -255,34 +262,35 @@ export default function Dashboard() {
                   Nenhuma movimentação {lbPeriod === 'hoje' ? 'hoje' : 'esta semana'}.
                 </p>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                <div className="flex flex-wrap gap-4">
                   {leaderboard.map((entry, i) => {
-                    const medals = ['🥇', '🥈', '🥉']
-                    const medal = medals[i] ?? null
-                    const isFirst = i === 0
+                    const podium = ['🥇', '🥈', '🥉']
+                    const isTop3 = i < 3
                     return (
                       <div
                         key={entry.name}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${
-                          isFirst
-                            ? 'border-amber-500/40 bg-amber-500/5'
-                            : 'border-zinc-800 bg-zinc-950'
-                        }`}
+                        title={`${entry.name} — ${entry.count} ${entry.count === 1 ? 'movimentação' : 'movimentações'}`}
+                        className="flex flex-col items-center gap-1.5"
                       >
-                        <span className="text-xl w-6 text-center flex-shrink-0">
-                          {medal ?? <span className="text-zinc-600 text-sm font-bold">#{i + 1}</span>}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-semibold truncate ${isFirst ? 'text-amber-300' : 'text-zinc-100'}`}>
-                            {entry.name}
-                          </p>
-                          <p className="text-xs text-zinc-500">
-                            {entry.count} {entry.count === 1 ? 'movimentação' : 'movimentações'}
-                          </p>
+                        {/* Avatar — mesmo estilo do card do CRM */}
+                        <div className="relative">
+                          <div className="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-sm font-bold text-indigo-400 select-none">
+                            {getInitials(entry.name)}
+                          </div>
+                          {/* Badge de quantidade */}
+                          <span className={`absolute -bottom-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold leading-none ${
+                            isTop3 ? 'bg-amber-500 text-zinc-900' : 'bg-zinc-700 text-zinc-200'
+                          }`}>
+                            {entry.count}
+                          </span>
                         </div>
-                        <span className={`text-lg font-bold flex-shrink-0 ${isFirst ? 'text-amber-400' : 'text-emerald-400'}`}>
-                          {entry.count}
-                        </span>
+                        {/* Nome abreviado + medalha */}
+                        <div className="flex items-center gap-0.5">
+                          {podium[i] && <span className="text-[11px] leading-none">{podium[i]}</span>}
+                          <span className="text-[11px] text-zinc-400 max-w-[60px] truncate leading-tight">
+                            {entry.name.split(' ')[0]}
+                          </span>
+                        </div>
                       </div>
                     )
                   })}
