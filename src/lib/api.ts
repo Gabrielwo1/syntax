@@ -47,6 +47,9 @@ export interface Lead {
   priority?: 'low' | 'medium' | 'high'
   notes?: string
   responsible?: string
+  responsibleUserId?: string
+  movedBy?: string
+  movedById?: string
   nextFollowUp?: string
   folderId?: string
   stage: 'novo' | 'contato' | 'proposta' | 'negociacao' | 'fechado' | 'perdido'

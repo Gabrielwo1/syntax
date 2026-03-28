@@ -139,22 +139,19 @@ export default function Dashboard() {
   const recentLeads = leads.slice(0, 5)
   const recentTasks = tasks.slice(0, 5)
 
-  // Build leaderboard from stage_change activities
+  // Build leaderboard from lead.movedBy + lead.updatedAt (same source as CRM card avatars)
   const weekStart = startOfWeek(new Date(), { locale: ptBR })
   const moveCount: Record<string, number> = {}
   leads.forEach(lead => {
-    (lead.activities || []).forEach(a => {
-      if (a.type !== 'stage_change') return
-      const mover = a.movedBy || 'Desconhecido'
-      const ts = a.at || a.createdAt
-      if (!ts) return
-      let include = false
-      try {
-        const d = parseISO(ts)
-        include = lbPeriod === 'hoje' ? isToday(d) : isAfter(d, weekStart)
-      } catch { return }
-      if (include) moveCount[mover] = (moveCount[mover] || 0) + 1
-    })
+    if (!lead.movedBy) return
+    const ts = lead.updatedAt || lead.createdAt
+    if (!ts) return
+    let include = false
+    try {
+      const d = parseISO(ts)
+      include = lbPeriod === 'hoje' ? isToday(d) : isAfter(d, weekStart)
+    } catch { return }
+    if (include) moveCount[lead.movedBy] = (moveCount[lead.movedBy] || 0) + 1
   })
   const leaderboard: RankEntry[] = Object.entries(moveCount)
     .map(([name, count]) => ({ name, count }))
