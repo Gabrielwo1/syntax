@@ -61,6 +61,8 @@ export interface Activity {
   note?: string
   from?: string
   to?: string
+  movedBy?: string
+  movedById?: string
   at: string
   createdAt?: string
 }

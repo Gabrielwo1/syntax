@@ -12,6 +12,7 @@ import {
   FileText,
   Image,
   Loader2,
+  Trophy,
 } from 'lucide-react'
 import {
   AreaChart,
@@ -22,7 +23,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, isToday, startOfWeek, isAfter } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { crmApi, financeiroApi, tasksApi, sitesApi } from '../lib/api'
 import type { Lead, FinancialEntry, Task, Site } from '../lib/api'
@@ -71,6 +72,13 @@ function formatCurrency(val: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
 }
 
+type LeaderboardPeriod = 'hoje' | 'semana'
+
+interface RankEntry {
+  name: string
+  count: number
+}
+
 export default function Dashboard() {
   const { user, isAdmin, permissions } = useAuth()
   const navigate = useNavigate()
@@ -79,6 +87,7 @@ export default function Dashboard() {
   const [entries, setEntries] = useState<FinancialEntry[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [sites, setSites] = useState<Site[]>([])
+  const [lbPeriod, setLbPeriod] = useState<LeaderboardPeriod>('hoje')
 
   const canAccess = (perm: string) => isAdmin || permissions.includes(perm)
 
@@ -122,6 +131,28 @@ export default function Dashboard() {
 
   const recentLeads = leads.slice(0, 5)
   const recentTasks = tasks.slice(0, 5)
+
+  // Build leaderboard from stage_change activities
+  const weekStart = startOfWeek(new Date(), { locale: ptBR })
+  const moveCount: Record<string, number> = {}
+  leads.forEach(lead => {
+    (lead.activities || []).forEach(a => {
+      if (a.type !== 'stage_change') return
+      const mover = a.movedBy || 'Desconhecido'
+      const ts = a.at || a.createdAt
+      if (!ts) return
+      let include = false
+      try {
+        const d = parseISO(ts)
+        include = lbPeriod === 'hoje' ? isToday(d) : isAfter(d, weekStart)
+      } catch { return }
+      if (include) moveCount[mover] = (moveCount[mover] || 0) + 1
+    })
+  })
+  const leaderboard: RankEntry[] = Object.entries(moveCount)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10)
 
   const userName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuário'
 
@@ -193,6 +224,72 @@ export default function Dashboard() {
               />
             )}
           </div>
+
+          {/* CRM Leaderboard */}
+          {canAccess('crm') && (
+            <div className="bg-zinc-900 rounded-xl p-5 border border-zinc-800 shadow-xl shadow-black/10 mb-7">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Trophy size={18} className="text-amber-400" />
+                  <h3 className="font-semibold text-zinc-50">Ranking CRM</h3>
+                  <span className="text-zinc-500 text-xs">— movimentações de leads</span>
+                </div>
+                <div className="flex rounded-lg border border-zinc-700 overflow-hidden text-xs font-medium">
+                  <button
+                    onClick={() => setLbPeriod('hoje')}
+                    className={`px-3 py-1.5 transition-colors ${lbPeriod === 'hoje' ? 'bg-emerald-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  >
+                    Hoje
+                  </button>
+                  <button
+                    onClick={() => setLbPeriod('semana')}
+                    className={`px-3 py-1.5 transition-colors ${lbPeriod === 'semana' ? 'bg-emerald-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  >
+                    Esta semana
+                  </button>
+                </div>
+              </div>
+
+              {leaderboard.length === 0 ? (
+                <p className="text-zinc-500 text-sm text-center py-6">
+                  Nenhuma movimentação {lbPeriod === 'hoje' ? 'hoje' : 'esta semana'}.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {leaderboard.map((entry, i) => {
+                    const medals = ['🥇', '🥈', '🥉']
+                    const medal = medals[i] ?? null
+                    const isFirst = i === 0
+                    return (
+                      <div
+                        key={entry.name}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${
+                          isFirst
+                            ? 'border-amber-500/40 bg-amber-500/5'
+                            : 'border-zinc-800 bg-zinc-950'
+                        }`}
+                      >
+                        <span className="text-xl w-6 text-center flex-shrink-0">
+                          {medal ?? <span className="text-zinc-600 text-sm font-bold">#{i + 1}</span>}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-semibold truncate ${isFirst ? 'text-amber-300' : 'text-zinc-100'}`}>
+                            {entry.name}
+                          </p>
+                          <p className="text-xs text-zinc-500">
+                            {entry.count} {entry.count === 1 ? 'movimentação' : 'movimentações'}
+                          </p>
+                        </div>
+                        <span className={`text-lg font-bold flex-shrink-0 ${isFirst ? 'text-amber-400' : 'text-emerald-400'}`}>
+                          {entry.count}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-7">
             {/* Revenue chart */}
