@@ -18,6 +18,7 @@ import {
   Activity,
   MessageSquare,
   CalendarDays,
+  Megaphone,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { toast } from 'sonner'
@@ -42,6 +43,7 @@ const navItems: NavItem[] = [
   { to: '/social-media', label: 'Social Media', icon: <Share2 size={18} />, permission: 'social-media' },
   { to: '/copy', label: 'Copy', icon: <MessageSquare size={18} />, permission: 'copy' },
   { to: '/reunioes', label: 'Reuniões', icon: <CalendarDays size={18} />, permission: 'reunioes' },
+  { to: '/prospeccao', label: 'Prospecção WA', icon: <Megaphone size={18} />, permission: 'prospeccao' },
   { to: '/usuarios', label: 'Usuários', icon: <Users size={18} />, adminOnly: true },
   { to: '/log-funcoes', label: 'Log de Funções', icon: <Activity size={18} />, adminOnly: true },
 ]
