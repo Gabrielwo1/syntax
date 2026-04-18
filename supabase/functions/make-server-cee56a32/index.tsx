@@ -1973,6 +1973,142 @@ app.delete("/make-server-cee56a32/meetings/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+// ─── AGENTE CEO ──────────────────────────────────────────────────────────────
+
+function isAgentRequest(c: any): boolean {
+  const key = c.req.header('X-Agent-Key');
+  const expected = Deno.env.get('AGENT_API_KEY');
+  return !!expected && key === expected;
+}
+
+// GET /make-server-cee56a32/agent/summary — snapshot consolidado
+app.get("/make-server-cee56a32/agent/summary", async (c) => {
+  if (!isAgentRequest(c)) return c.json({ error: 'Unauthorized' }, 401);
+
+  const [taskIds, leadIds, meetingIds, finIds, quoteIds] = await Promise.all([
+    kv.get("tasks:list"),
+    kv.get("crm:leads:list"),
+    kv.get("meetings:list"),
+    kv.get("financeiro:entries:list"),
+    kv.get("quotes:list"),
+  ]);
+
+  const [tasks, leads, meetings, finEntries, quotes] = await Promise.all([
+    taskIds?.length ? kv.mget(taskIds).then((r: any[]) => r.filter(Boolean)) : Promise.resolve([]),
+    leadIds?.length ? kv.mget(leadIds).then((r: any[]) => r.filter(Boolean)) : Promise.resolve([]),
+    meetingIds?.length ? kv.mget(meetingIds).then((r: any[]) => r.filter(Boolean)) : Promise.resolve([]),
+    finIds?.length ? kv.mget(finIds).then((r: any[]) => r.filter(Boolean)) : Promise.resolve([]),
+    quoteIds?.length ? kv.mget(quoteIds).then((r: any[]) => r.filter(Boolean)) : Promise.resolve([]),
+  ]);
+
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const monthFin = finEntries.filter((e: any) => e.dueDate?.startsWith(currentMonth));
+  const receitas = monthFin.filter((e: any) => e.type === 'receita' && e.status === 'paid').reduce((s: number, e: any) => s + (e.amount || 0), 0);
+  const despesas = monthFin.filter((e: any) => e.type === 'despesa' && e.status === 'paid').reduce((s: number, e: any) => s + (e.amount || 0), 0);
+  const pendentes = monthFin.filter((e: any) => e.status === 'pending').reduce((s: number, e: any) => s + (e.amount || 0), 0);
+
+  const nowStr = new Date().toISOString();
+  const upcoming = meetings
+    .filter((m: any) => `${m.date}T${m.time}` >= nowStr.slice(0, 16))
+    .sort((a: any, b: any) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))
+    .slice(0, 5);
+
+  const leadsByStatus = leads.reduce((acc: any, l: any) => {
+    acc[l.status] = (acc[l.status] || 0) + 1;
+    return acc;
+  }, {});
+
+  return c.json({
+    generatedAt: new Date().toISOString(),
+    financeiro: {
+      mes: currentMonth,
+      receitas,
+      despesas,
+      resultado: receitas - despesas,
+      pendentes,
+      totalEntradas: finEntries.length,
+    },
+    tarefas: {
+      total: tasks.length,
+      todo: tasks.filter((t: any) => t.status === 'todo').length,
+      inProgress: tasks.filter((t: any) => t.status === 'in_progress').length,
+      done: tasks.filter((t: any) => t.status === 'done').length,
+    },
+    crm: {
+      total: leads.length,
+      porStatus: leadsByStatus,
+    },
+    reunioes: {
+      proximas: upcoming,
+      total: meetings.length,
+    },
+    orcamentos: {
+      total: quotes.length,
+      aprovados: quotes.filter((q: any) => q.status === 'approved').length,
+      pendentes: quotes.filter((q: any) => q.status === 'pending').length,
+    },
+  });
+});
+
+// POST /make-server-cee56a32/agent/action — cria recursos via agente
+app.post("/make-server-cee56a32/agent/action", async (c) => {
+  if (!isAgentRequest(c)) return c.json({ error: 'Unauthorized' }, 401);
+
+  const body = await c.req.json();
+  const { action, data } = body;
+
+  if (action === 'create_task') {
+    const { title, status = 'todo', assignedTo, dueDate } = data || {};
+    if (!title?.trim()) return c.json({ error: 'title obrigatório' }, 400);
+    const id = `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const task = { id, title: title.trim(), status, assignedTo: assignedTo || '', dueDate: dueDate || '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    await kv.set(id, task);
+    const list = (await kv.get("tasks:list")) || [];
+    list.push(id);
+    await kv.set("tasks:list", list);
+    return c.json({ ok: true, task });
+  }
+
+  if (action === 'create_lead') {
+    const { name, company, email, phone, status = 'novo', folderId } = data || {};
+    if (!name?.trim()) return c.json({ error: 'name obrigatório' }, 400);
+    const id = `crm-lead-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const lead = { id, name: name.trim(), company: company || '', email: email || '', phone: phone || '', status, folderId: folderId || '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    await kv.set(id, lead);
+    const list = (await kv.get("crm:leads:list")) || [];
+    list.push(id);
+    await kv.set("crm:leads:list", list);
+    return c.json({ ok: true, lead });
+  }
+
+  if (action === 'create_lancamento') {
+    const { title, type, amount, category = 'Outros', dueDate, status = 'pending', recurrence } = data || {};
+    if (!title?.trim() || !type || amount == null || !dueDate) return c.json({ error: 'title, type, amount e dueDate obrigatórios' }, 400);
+    if (!['receita', 'despesa'].includes(type)) return c.json({ error: 'type deve ser receita ou despesa' }, 400);
+    const id = `fin-entry-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const entry = { id, title: title.trim(), type, amount: Number(amount), category, dueDate, status, recurrence: recurrence || '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    await kv.set(id, entry);
+    const list = (await kv.get("financeiro:entries:list")) || [];
+    list.push(id);
+    await kv.set("financeiro:entries:list", list);
+    return c.json({ ok: true, entry });
+  }
+
+  if (action === 'create_meeting') {
+    const { title, date, time, notes, createdBy } = data || {};
+    if (!title?.trim() || !date || !time) return c.json({ error: 'title, date e time obrigatórios' }, 400);
+    const id = `meeting-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const meeting = { id, title: title.trim(), date, time, notes: notes || '', createdBy: createdBy || 'Agente CEO', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    await kv.set(id, meeting);
+    const list = (await kv.get("meetings:list")) || [];
+    list.push(id);
+    await kv.set("meetings:list", list);
+    return c.json({ ok: true, meeting });
+  }
+
+  return c.json({ error: `Ação desconhecida: ${action}. Ações válidas: create_task, create_lead, create_lancamento, create_meeting` }, 400);
+});
+
 // ────────────────────────────────────────────────────────────────────────────
 
 Deno.serve(app.fetch);

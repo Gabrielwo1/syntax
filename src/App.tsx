@@ -48,6 +48,7 @@ import LogFuncoes from './pages/LogFuncoes'
 import CopyPage from './pages/Copy'
 import Meetings from './pages/Meetings'
 import Prospeccao from './pages/Prospeccao'
+import WhatsappInbox from './pages/WhatsappInbox'
 
 function LoadingSpinner() {
   return (
@@ -68,6 +69,15 @@ function ProtectedRoute({ children, adminOnly = false }: { children: React.React
   if (adminOnly && !isAdmin) return <Navigate to="/" replace />
 
   return <Layout>{children}</Layout>
+}
+
+function ProtectedRouteFull({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth()
+
+  if (loading) return <LoadingSpinner />
+  if (!user) return <Navigate to="/login" replace />
+
+  return <>{children}</>
 }
 
 function AppRoutes() {
@@ -183,6 +193,14 @@ function AppRoutes() {
           <ProtectedRoute>
             <Prospeccao />
           </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/whatsapp-inbox"
+        element={
+          <ProtectedRouteFull>
+            <WhatsappInbox />
+          </ProtectedRouteFull>
         }
       />
       <Route

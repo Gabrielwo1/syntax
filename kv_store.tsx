@@ -59,12 +59,26 @@ export const mset = async (keys: string[], values: any[]): Promise<void> => {
 
 // Gets multiple key-value pairs from the database.
 export const mget = async (keys: string[]): Promise<any[]> => {
-  const supabase = client()
-  const { data, error } = await supabase.from("kv_store_cee56a32").select("value").in("key", keys);
-  if (error) {
-    throw new Error(error.message);
+  const supabase = client();
+  const results: any[] = [];
+  const chunkSize = 50;
+
+  for (let i = 0; i < keys.length; i += chunkSize) {
+    const chunk = keys.slice(i, i + chunkSize);
+    const { data, error } = await supabase
+      .from("kv_store_cee56a32")
+      .select("value")
+      .in("key", chunk);
+      
+    if (error) {
+      throw new Error(error.message);
+    }
+    if (data) {
+      results.push(...data.map((d) => d.value));
+    }
   }
-  return data?.map((d) => d.value) ?? [];
+
+  return results;
 };
 
 // Deletes multiple key-value pairs from the database.
