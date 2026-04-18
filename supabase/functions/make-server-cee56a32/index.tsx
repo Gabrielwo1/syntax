@@ -13,12 +13,27 @@ app.use(
   "/*",
   cors({
     origin: "*",
-    allowHeaders: ["Content-Type", "Authorization", "apikey"],
+    allowHeaders: ["Content-Type", "Authorization", "apikey", "X-Agent-Key"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
   }),
 );
+
+// ─── Agent API Key helper ─────────────────────────────────────────────────────
+// Returns true when the request carries a valid AGENT_API_KEY.
+// Used by requireAuth / requireAdmin to bypass JWT for the CEO agent.
+function isAgentRequest(c: any): boolean {
+  const key = c.req.header('X-Agent-Key');
+  const secret = Deno.env.get('AGENT_API_KEY');
+  return !!(key && secret && key === secret);
+}
+
+const AGENT_USER = {
+  id: 'agent-ceo',
+  email: 'agent@syntax.internal',
+  user_metadata: { name: 'Agente CEO', role: 'admin', permissions: [] },
+};
 
 // ─── Auth helper ─────────────────────────────────────────────────────────────
 // Extracts the user JWT from the Authorization header and validates it.
@@ -27,6 +42,12 @@ app.use(
 // `supabase.auth.getUser()` crashes with "missing sub claim". We detect this
 // early and return a clear error instead.
 async function requireAdmin(c: any): Promise<{ user: any; supabase: any } | Response> {
+  // CEO agent bypass — valid X-Agent-Key has full admin access
+  if (isAgentRequest(c)) {
+    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    return { user: AGENT_USER, supabase };
+  }
+
   const accessToken = c.req.header('Authorization')?.split(' ')[1];
   if (!accessToken) {
     return c.json({ error: "Unauthorized: token ausente" }, 401);
@@ -82,6 +103,9 @@ async function requireAdmin(c: any): Promise<{ user: any; supabase: any } | Resp
 // Like requireAdmin but only verifies the user exists — doesn't check role.
 // Returns the user or a Response (caller must check with instanceof Response).
 async function requireAuth(c: any): Promise<{ user: any } | Response> {
+  // CEO agent bypass — valid X-Agent-Key has full access
+  if (isAgentRequest(c)) return { user: AGENT_USER };
+
   const accessToken = c.req.header('Authorization')?.split(' ')[1];
   if (!accessToken) {
     return c.json({ error: 'Unauthorized: token ausente' }, 401);
@@ -1971,6 +1995,200 @@ app.delete("/make-server-cee56a32/meetings/:id", async (c) => {
   const list = ((await kv.get("meetings:list")) || []).filter((mid: string) => mid !== id);
   await kv.set("meetings:list", list);
   return c.json({ ok: true });
+});
+
+// ─── CEO Agent Routes ─────────────────────────────────────────────────────────
+
+function agentOnly(c: any): Response | null {
+  if (!isAgentRequest(c)) {
+    return c.json({ error: 'Forbidden: X-Agent-Key inválido ou ausente' }, 403);
+  }
+  return null;
+}
+
+// GET /agent/summary — consolidated business snapshot
+app.get('/make-server-cee56a32/agent/summary', async (c) => {
+  const deny = agentOnly(c);
+  if (deny) return deny;
+
+  const now = new Date();
+  const currentMonth = now.toISOString().slice(0, 7); // YYYY-MM
+  const todayStr = now.toISOString().slice(0, 10);    // YYYY-MM-DD
+
+  // ── Fetch all data in parallel ──────────────────────────────────────────
+  const [
+    leadIds, entryIds, taskIds, meetingIds, quoteIds,
+  ] = await Promise.all([
+    kv.get('crm:leads:list').then((r: any) => r || []),
+    kv.get('financeiro:entries:list').then((r: any) => r || []),
+    kv.get('tasks:list').then((r: any) => r || []),
+    kv.get('meetings:list').then((r: any) => r || []),
+    kv.get('quotes:list').then((r: any) => r || []),
+  ]);
+
+  const [leads, entries, tasks, meetings, quotes] = await Promise.all([
+    kv.mget(leadIds),
+    kv.mget(entryIds),
+    kv.mget(taskIds),
+    kv.mget(meetingIds),
+    kv.mget(quoteIds),
+  ]);
+
+  // ── Financeiro — mês atual ──────────────────────────────────────────────
+  const monthEntries = entries.filter((e: any) => e?.dueDate?.slice(0, 7) === currentMonth);
+  const receivable = monthEntries.filter((e: any) => e?.type === 'receivable');
+  const payable    = monthEntries.filter((e: any) => e?.type === 'payable');
+  const sumR = receivable.reduce((s: number, e: any) => s + (e?.amount || 0), 0);
+  const sumP = payable.reduce((s: number, e: any) => s + (e?.amount || 0), 0);
+
+  const financeiro = {
+    mes: currentMonth,
+    totalReceber:  sumR,
+    totalPagar:    sumP,
+    saldoPrevisto: sumR - sumP,
+    lancamentos: monthEntries.map((e: any) => ({
+      id: e.id, tipo: e.type, descricao: e.description,
+      valor: e.amount, vencimento: e.dueDate, status: e.status,
+      clienteFornecedor: e.clientOrSupplier,
+    })),
+  };
+
+  // ── Tarefas abertas ─────────────────────────────────────────────────────
+  const openTasks = tasks.filter((t: any) => t?.status !== 'completed');
+  const overdueTasks = openTasks.filter((t: any) => t?.due && t.due < todayStr);
+
+  // Group by assignee
+  const byAssignee: Record<string, any[]> = {};
+  openTasks.forEach((t: any) => {
+    if (!t) return;
+    const key = t.assignee || 'Sem responsável';
+    if (!byAssignee[key]) byAssignee[key] = [];
+    byAssignee[key].push({ id: t.id, nome: t.name, status: t.status, prioridade: t.priority, vencimento: t.due || null });
+  });
+
+  const tarefas = {
+    totalAbertas: openTasks.length,
+    atrasadas: overdueTasks.map((t: any) => ({
+      id: t.id, nome: t.name, responsavel: t.assignee, vencimento: t.due, prioridade: t.priority,
+    })),
+    porResponsavel: byAssignee,
+  };
+
+  // ── CRM — leads ativos + últimos 5 ─────────────────────────────────────
+  const activeLeads = leads.filter((l: any) => l && !['fechado', 'perdido'].includes(l.stage));
+  const last5 = [...leads]
+    .filter(Boolean)
+    .sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    .slice(0, 5);
+
+  const stageCount: Record<string, number> = {};
+  activeLeads.forEach((l: any) => { stageCount[l.stage] = (stageCount[l.stage] || 0) + 1; });
+
+  const crm = {
+    totalAtivos: activeLeads.length,
+    porEtapa: stageCount,
+    ultimos5: last5.map((l: any) => ({
+      id: l.id, nome: l.name, empresa: l.company, etapa: l.stage,
+      responsavel: l.responsible, criadoEm: l.createdAt,
+    })),
+  };
+
+  // ── Reuniões — próximas 3 ───────────────────────────────────────────────
+  const upcoming = meetings
+    .filter((m: any) => m?.date && `${m.date}T${m.time || '00:00'}` >= now.toISOString().slice(0, 16))
+    .sort((a: any, b: any) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))
+    .slice(0, 3)
+    .map((m: any) => ({ id: m.id, titulo: m.title, data: m.date, hora: m.time, notas: m.notes }));
+
+  // ── Orçamentos — pipeline ───────────────────────────────────────────────
+  const pipeline = quotes
+    .filter(Boolean)
+    .map((q: any) => ({
+      id: q.id, numero: q.number, cliente: q.client || q.clientName,
+      valor: q.total || q.amount || q.valor || null,
+      status: q.status, criadoEm: q.createdAt,
+    }));
+  const pipelineSum = pipeline.reduce((s: number, q: any) => s + (q.valor || 0), 0);
+
+  return c.json({
+    geradoEm: now.toISOString(),
+    financeiro,
+    tarefas,
+    crm,
+    reunioes: { proximas: upcoming },
+    orcamentos: { total: pipeline.length, somaPipeline: pipelineSum, lista: pipeline },
+  });
+});
+
+// POST /agent/action — unified write action
+app.post('/make-server-cee56a32/agent/action', async (c) => {
+  const deny = agentOnly(c);
+  if (deny) return deny;
+
+  const body = await c.req.json().catch(() => null);
+  if (!body?.action || !body?.payload) {
+    return c.json({ error: 'Body deve conter "action" e "payload"' }, 400);
+  }
+
+  const { action, payload } = body;
+  const ts = Date.now();
+  const rand = Math.random().toString(36).substr(2, 9);
+  const now = new Date().toISOString();
+
+  if (action === 'create_task') {
+    const { name, project, assignee, due, priority, description, status } = payload;
+    if (!name) return c.json({ error: 'name é obrigatório' }, 400);
+    const id = `task-${ts}-${rand}`;
+    const task = { id, name, project, assignee, due, priority: priority || 'medium',
+      description, status: status || 'not_started', tags: [], estimatedHours: null,
+      createdAt: now, updatedAt: now };
+    await kv.set(id, task);
+    const list = (await kv.get('tasks:list')) || [];
+    await kv.set('tasks:list', [...list, id]);
+    return c.json({ ok: true, action, task });
+  }
+
+  if (action === 'create_lead') {
+    const { name, email, company, phone, stage, responsible, source, notes } = payload;
+    if (!name) return c.json({ error: 'name é obrigatório' }, 400);
+    const id = `crm-lead-${ts}-${rand}`;
+    const lead = { id, name, email: email || '', company, phone, stage: stage || 'novo',
+      responsible, source: source || 'Agente CEO', notes, activities: [],
+      createdAt: now, updatedAt: now };
+    await kv.set(id, lead);
+    const list = (await kv.get('crm:leads:list')) || [];
+    await kv.set('crm:leads:list', [...list, id]);
+    return c.json({ ok: true, action, lead });
+  }
+
+  if (action === 'create_entry') {
+    const { type, description, amount, dueDate, category, clientOrSupplier, notes } = payload;
+    if (!type || !description || !amount || !dueDate) {
+      return c.json({ error: 'type, description, amount e dueDate são obrigatórios' }, 400);
+    }
+    const id = `fin-entry-${ts}-${rand}`;
+    const entry = { id, type, description, amount: parseFloat(amount), dueDate, category,
+      clientOrSupplier, notes, status: 'pending', createdAt: now, updatedAt: now };
+    await kv.set(id, entry);
+    const list = (await kv.get('financeiro:entries:list')) || [];
+    await kv.set('financeiro:entries:list', [...list, id]);
+    return c.json({ ok: true, action, entry });
+  }
+
+  if (action === 'create_meeting') {
+    const { title, date, time, notes } = payload;
+    if (!title || !date || !time) {
+      return c.json({ error: 'title, date e time são obrigatórios' }, 400);
+    }
+    const id = `meeting-${ts}-${rand}`;
+    const meeting = { id, title, date, time, notes, createdBy: 'Agente CEO', createdAt: now, updatedAt: now };
+    await kv.set(id, meeting);
+    const list = (await kv.get('meetings:list')) || [];
+    await kv.set('meetings:list', [...list, id]);
+    return c.json({ ok: true, action, meeting });
+  }
+
+  return c.json({ error: `Ação desconhecida: "${action}". Use: create_task, create_lead, create_entry, create_meeting` }, 400);
 });
 
 // ────────────────────────────────────────────────────────────────────────────
