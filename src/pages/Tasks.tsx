@@ -56,7 +56,7 @@ function apiToLocal(t: Task): LocalTask {
     project: t.project ?? '',
     name: t.name,
     description: t.description ?? '',
-    status: (t.status === 'completed' ? 'done' : t.status) as TaskStatus,
+    status: (t.status === 'completed' ? 'done' : t.status === 'todo' ? 'not_started' : t.status || 'not_started') as TaskStatus,
     priority: (t.priority as TaskPriority) ?? 'medium',
     due: t.due ?? '',
     assignee: t.assignee ?? '',

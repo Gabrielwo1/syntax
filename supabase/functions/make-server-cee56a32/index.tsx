@@ -2058,7 +2058,11 @@ app.post("/make-server-cee56a32/agent/action", async (c) => {
   const { action, data } = body;
 
   if (action === 'create_task') {
-    const { title, status = 'todo', assignedTo, dueDate } = data || {};
+    // Normalize status: agente pode enviar 'todo' mas o sistema usa 'not_started'
+    const rawStatus = data?.status ?? 'not_started'
+    const normalizedStatus = rawStatus === 'todo' ? 'not_started' : rawStatus === 'completed' ? 'done' : rawStatus
+    const { title, assignedTo, dueDate } = data || {}
+    const status = normalizedStatus
     if (!title?.trim()) return c.json({ error: 'title obrigatório' }, 400);
     const id = `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const task = { id, title: title.trim(), status, assignedTo: assignedTo || '', dueDate: dueDate || '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
