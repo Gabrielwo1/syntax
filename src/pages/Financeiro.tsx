@@ -18,6 +18,8 @@ import {
   Users2,
   Repeat2,
   Info,
+  Lock,
+  ArrowRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO, isPast, getDaysInMonth, isAfter, startOfMonth } from 'date-fns'
@@ -85,6 +87,104 @@ function parseMonthYear(dateStr: string): { month: number; year: number } {
     const now = new Date()
     return { month: now.getMonth() + 1, year: now.getFullYear() }
   }
+}
+
+function nextMonthYM(ym: string): string {
+  const [y, m] = ym.split('-').map(Number)
+  if (m === 12) return `${y + 1}-01`
+  return `${y}-${String(m + 1).padStart(2, '0')}`
+}
+
+// ── CloseMonthModal ───────────────────────────────────────────────────────────
+
+function CloseMonthModal({
+  month,
+  entries,
+  onClose,
+  onConfirm,
+}: {
+  month: string
+  entries: (FinancialEntry & { computedStatus: string })[]
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  const label = formatMonthLabel(month)
+  const monthEntries = entries.filter(e => e.dueDate?.slice(0, 7) === month)
+  const totalRec  = monthEntries.filter(e => e.type === 'receivable').reduce((s, e) => s + e.amount, 0)
+  const totalPay  = monthEntries.filter(e => e.type === 'payable').reduce((s, e) => s + e.amount, 0)
+  const paidRec   = monthEntries.filter(e => e.type === 'receivable' && e.computedStatus === 'paid').reduce((s, e) => s + e.amount, 0)
+  const paidPay   = monthEntries.filter(e => e.type === 'payable' && e.computedStatus === 'paid').reduce((s, e) => s + e.amount, 0)
+  const pending   = monthEntries.filter(e => e.computedStatus !== 'paid').length
+  const balance   = paidRec - paidPay
+  const next      = nextMonthYM(month)
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-800">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center">
+              <Lock size={18} className="text-emerald-400" />
+            </div>
+            <div>
+              <h2 className="font-bold text-zinc-50">Fechar {label}</h2>
+              <p className="text-xs text-zinc-500">Resumo do mês antes de fechar</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Summary */}
+        <div className="px-6 py-5 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-zinc-950 rounded-xl p-4 border border-zinc-800">
+              <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">Total a Receber</p>
+              <p className="text-lg font-bold text-emerald-400">{formatCurrency(totalRec)}</p>
+              <p className="text-[11px] text-zinc-600 mt-0.5">{formatCurrency(paidRec)} pago</p>
+            </div>
+            <div className="bg-zinc-950 rounded-xl p-4 border border-zinc-800">
+              <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">Total a Pagar</p>
+              <p className="text-lg font-bold text-rose-400">{formatCurrency(totalPay)}</p>
+              <p className="text-[11px] text-zinc-600 mt-0.5">{formatCurrency(paidPay)} pago</p>
+            </div>
+          </div>
+
+          <div className="bg-zinc-950 rounded-xl p-4 border border-zinc-800 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">Saldo do mês</p>
+              <p className={`text-xl font-bold ${balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatCurrency(balance)}</p>
+            </div>
+            {pending > 0 && (
+              <div className="text-right">
+                <p className="text-xs text-amber-400 font-medium">{pending} pendente{pending !== 1 ? 's' : ''}</p>
+                <p className="text-[11px] text-zinc-500">não afetam o fechamento</p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 p-3 bg-zinc-950 rounded-xl border border-zinc-800 text-xs text-zinc-400">
+            <ArrowRight size={13} className="text-emerald-500 flex-shrink-0" />
+            <span>Após fechar, você será levado para <span className="text-zinc-200 font-medium">{formatMonthLabel(next)}</span> com dados limpos.</span>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-3 px-6 pb-5">
+          <button onClick={onClose}
+            className="flex-1 px-4 py-2.5 border border-zinc-700 text-zinc-300 text-sm font-medium rounded-lg hover:bg-zinc-800 transition">
+            Cancelar
+          </button>
+          <button onClick={onConfirm}
+            className="flex-1 px-4 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition flex items-center justify-center gap-2">
+            <Lock size={14} /> Fechar {label}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ── EntryModal ────────────────────────────────────────────────────────────────
@@ -575,6 +675,10 @@ export default function Financeiro() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [search, setSearch] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [showCloseModal, setShowCloseModal] = useState(false)
+  const [closedMonths, setClosedMonths] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('fin:closedMonths') || '[]') } catch { return [] }
+  })
   const tabsRef = useRef<HTMLDivElement>(null)
   const didAutoSelect = useRef(false)
 
@@ -621,11 +725,26 @@ export default function Financeiro() {
     if (entry.dueDate) setActiveMonth(entry.dueDate.slice(0, 7))
   }
 
+  const handleCloseMonth = () => {
+    if (!activeMonth) return
+    const updated = closedMonths.includes(activeMonth) ? closedMonths : [...closedMonths, activeMonth]
+    setClosedMonths(updated)
+    localStorage.setItem('fin:closedMonths', JSON.stringify(updated))
+    setShowCloseModal(false)
+    toast.success(`${formatMonthLabel(activeMonth)} fechado!`)
+    setActiveMonth(nextMonthYM(activeMonth))
+  }
+
   // Derived
   const enriched = entries.map(e => ({ ...e, computedStatus: getEntryStatus(e) }))
 
+  // Include next month after the last available/closed so user can always move forward
+  const entryMonths = Array.from(new Set(enriched.map(e => e.dueDate?.slice(0, 7)).filter(Boolean))) as string[]
+  const allKnownMonths = Array.from(new Set([...entryMonths, ...closedMonths])).sort()
+  const lastKnown = allKnownMonths[allKnownMonths.length - 1]
+  const currentYM = format(new Date(), 'yyyy-MM')
   const availableMonths = Array.from(
-    new Set(enriched.map(e => e.dueDate?.slice(0, 7)).filter(Boolean))
+    new Set([...allKnownMonths, currentYM, lastKnown ? nextMonthYM(lastKnown) : currentYM])
   ).sort() as string[]
 
   // Summary scoped to active month (or all)
@@ -685,12 +804,22 @@ export default function Financeiro() {
           </p>
         </div>
         {pageTab === 'lancamentos' && (
-          <button
-            onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition shadow-sm"
-          >
-            <Plus size={16} /> Novo Lançamento
-          </button>
+          <div className="flex items-center gap-2">
+            {activeMonth && !closedMonths.includes(activeMonth) && (
+              <button
+                onClick={() => setShowCloseModal(true)}
+                className="flex items-center gap-2 px-4 py-2 border border-zinc-700 text-zinc-300 text-sm font-medium rounded-lg hover:border-emerald-500 hover:text-emerald-400 transition"
+              >
+                <Lock size={14} /> Fechar Mês
+              </button>
+            )}
+            <button
+              onClick={() => setShowAdd(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition shadow-sm"
+            >
+              <Plus size={16} /> Novo Lançamento
+            </button>
+          </div>
         )}
       </div>
 
@@ -779,21 +908,25 @@ export default function Financeiro() {
             </button>
 
             {availableMonths.map(ym => {
-              const isActive = activeMonth === ym
+              const isActive   = activeMonth === ym
+              const isClosed   = closedMonths.includes(ym)
               const monthEntries = enriched.filter(e => e.dueDate?.slice(0, 7) === ym)
-              const hasOverdue   = monthEntries.some(e => e.computedStatus === 'overdue')
+              const hasOverdue = monthEntries.some(e => e.computedStatus === 'overdue')
               return (
                 <button
                   key={ym}
                   onClick={() => setActiveMonth(ym)}
-                  className={`relative px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap flex-shrink-0 transition border ${
+                  className={`relative px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap flex-shrink-0 transition border flex items-center gap-1.5 ${
                     isActive
                       ? 'bg-emerald-600 text-white border-emerald-600'
-                      : 'border-zinc-700 text-zinc-400 hover:border-emerald-500 hover:text-emerald-400'
+                      : isClosed
+                        ? 'border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
+                        : 'border-zinc-700 text-zinc-400 hover:border-emerald-500 hover:text-emerald-400'
                   }`}
                 >
+                  {isClosed && <Lock size={10} className={isActive ? 'text-white/70' : 'text-zinc-500'} />}
                   {formatMonthLabel(ym)}
-                  {hasOverdue && !isActive && (
+                  {hasOverdue && !isActive && !isClosed && (
                     <span className="absolute -top-1 -right-1 w-2 h-2 bg-rose-500 rounded-full" title="Vencidos neste mês" />
                   )}
                 </button>
@@ -803,6 +936,25 @@ export default function Financeiro() {
 
           <button onClick={() => scrollTabs(1)} className="p-1 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 flex-shrink-0 transition">
             <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Closed month banner */}
+      {activeMonth && closedMonths.includes(activeMonth) && (
+        <div className="flex items-center gap-3 px-4 py-3 mb-4 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-zinc-400">
+          <Lock size={14} className="text-zinc-500 flex-shrink-0" />
+          <span>Este mês foi <span className="text-zinc-200 font-medium">fechado</span>. Os dados são somente leitura.</span>
+          <button
+            onClick={() => {
+              const updated = closedMonths.filter(m => m !== activeMonth)
+              setClosedMonths(updated)
+              localStorage.setItem('fin:closedMonths', JSON.stringify(updated))
+              toast('Mês reaberto.')
+            }}
+            className="ml-auto text-xs text-zinc-500 hover:text-zinc-200 underline underline-offset-2 transition"
+          >
+            Reabrir
           </button>
         </div>
       )}
@@ -957,6 +1109,14 @@ export default function Financeiro() {
           entry={editEntry}
           onClose={() => setEditEntry(null)}
           onSaved={handleSaved}
+        />
+      )}
+      {showCloseModal && activeMonth && (
+        <CloseMonthModal
+          month={activeMonth}
+          entries={enriched}
+          onClose={() => setShowCloseModal(false)}
+          onConfirm={handleCloseMonth}
         />
       )}
     </div>
