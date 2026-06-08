@@ -1997,6 +1997,58 @@ app.delete("/make-server-cee56a32/meetings/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+// ─── PROSPECÇÃO ENDPOINTS ─────────────────────────────────────────────────────
+
+app.get('/make-server-cee56a32/prospeccao/logs', async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const logs = await kv.getByPrefix('prospeccao:log:');
+  logs.sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt));
+  return c.json({ logs });
+});
+
+app.post('/make-server-cee56a32/prospeccao/logs', async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const body = await c.req.json();
+  const { platform, notes } = body;
+  const now = new Date();
+  const id = `prospeccao:log:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`;
+  const log = {
+    id,
+    platform: platform || 'Workana',
+    date: now.toISOString().slice(0, 10),
+    notes: notes || null,
+    createdAt: now.toISOString(),
+  };
+  await kv.set(id, log);
+  return c.json({ log });
+});
+
+app.delete('/make-server-cee56a32/prospeccao/logs/:id', async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const id = decodeURIComponent(c.req.param('id'));
+  await kv.del(id);
+  return c.json({ ok: true });
+});
+
+app.get('/make-server-cee56a32/prospeccao/goal', async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const goal = (await kv.get('prospeccao:goal')) ?? 5;
+  return c.json({ goal });
+});
+
+app.put('/make-server-cee56a32/prospeccao/goal', async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const { goal } = await c.req.json();
+  const n = Math.max(1, parseInt(goal) || 5);
+  await kv.set('prospeccao:goal', n);
+  return c.json({ goal: n });
+});
+
 // ─── CEO Agent Routes ─────────────────────────────────────────────────────────
 
 function agentOnly(c: any): Response | null {
