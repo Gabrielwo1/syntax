@@ -47,6 +47,7 @@ import Quotes from './pages/Quotes'
 import LogFuncoes from './pages/LogFuncoes'
 import CopyPage from './pages/Copy'
 import Meetings from './pages/Meetings'
+import Prospeccao from './pages/Prospeccao'
 
 function LoadingSpinner() {
   return (
@@ -173,6 +174,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Meetings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/prospeccao"
+        element={
+          <ProtectedRoute>
+            <Prospeccao />
           </ProtectedRoute>
         }
       />

@@ -655,3 +655,34 @@ export const meetingsApi = {
   delete: (id: string) =>
     apiFetch(`/meetings/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 }
+
+// ── Prospecção ────────────────────────────────────────────────────────────────
+
+export interface ProspectionLog {
+  id: string
+  platform: string
+  date: string        // YYYY-MM-DD
+  notes?: string
+  createdAt: string
+}
+
+export const prospeccaoApi = {
+  getLogs: () => apiFetch<{ logs: ProspectionLog[] }>('/prospeccao/logs'),
+
+  addLog: (data: { platform?: string; notes?: string }) =>
+    apiFetch<{ log: ProspectionLog }>('/prospeccao/logs', {
+      method: 'POST',
+      body: JSON.stringify({ platform: 'Workana', ...data }),
+    }),
+
+  deleteLog: (id: string) =>
+    apiFetch(`/prospeccao/logs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  getGoal: () => apiFetch<{ goal: number }>('/prospeccao/goal'),
+
+  setGoal: (goal: number) =>
+    apiFetch<{ goal: number }>('/prospeccao/goal', {
+      method: 'PUT',
+      body: JSON.stringify({ goal }),
+    }),
+}
