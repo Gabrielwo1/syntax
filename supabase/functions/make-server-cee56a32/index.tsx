@@ -1997,6 +1997,60 @@ app.delete("/make-server-cee56a32/meetings/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+// ─── FREELA SITES ENDPOINTS ───────────────────────────────────────────────────
+
+app.get('/make-server-cee56a32/freela/logs', async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const logs = await kv.getByPrefix('freela:log:');
+  logs.sort((a: any, b: any) => b.date.localeCompare(a.date));
+  return c.json({ logs });
+});
+
+// Upsert: if same platform+date exists, update it; otherwise create
+app.post('/make-server-cee56a32/freela/logs', async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const body = await c.req.json();
+  const { id, platform, date, proposals, responses, appointments, notes } = body;
+  if (!platform || !date) return c.json({ error: 'platform e date são obrigatórios' }, 400);
+  const now = new Date().toISOString();
+
+  // If id provided, update existing
+  if (id) {
+    const existing = await kv.get(id);
+    if (!existing) return c.json({ error: 'Log não encontrado' }, 404);
+    const updated = { ...existing, proposals: proposals ?? 0, responses: responses ?? 0,
+      appointments: appointments ?? 0, notes: notes ?? null, updatedAt: now };
+    await kv.set(id, updated);
+    return c.json({ log: updated });
+  }
+
+  // Check if log already exists for platform+date
+  const allLogs = await kv.getByPrefix('freela:log:');
+  const existing = allLogs.find((l: any) => l.platform === platform && l.date === date);
+  if (existing) {
+    const updated = { ...existing, proposals: proposals ?? 0, responses: responses ?? 0,
+      appointments: appointments ?? 0, notes: notes ?? null, updatedAt: now };
+    await kv.set(existing.id, updated);
+    return c.json({ log: updated });
+  }
+
+  const newId = `freela:log:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`;
+  const log = { id: newId, platform, date, proposals: proposals ?? 0, responses: responses ?? 0,
+    appointments: appointments ?? 0, notes: notes ?? null, createdAt: now, updatedAt: now };
+  await kv.set(newId, log);
+  return c.json({ log });
+});
+
+app.delete('/make-server-cee56a32/freela/logs/:id', async (c) => {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const id = decodeURIComponent(c.req.param('id'));
+  await kv.del(id);
+  return c.json({ ok: true });
+});
+
 // ─── PROSPECÇÃO ENDPOINTS ─────────────────────────────────────────────────────
 
 app.get('/make-server-cee56a32/prospeccao/logs', async (c) => {

@@ -686,3 +686,39 @@ export const prospeccaoApi = {
       body: JSON.stringify({ goal }),
     }),
 }
+
+// ── Freela Sites ──────────────────────────────────────────────────────────────
+
+export interface FreelaDailyLog {
+  id: string
+  platform: string   // 'Workana' | '99Freelas'
+  date: string       // YYYY-MM-DD
+  proposals: number
+  responses: number
+  appointments: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export const freelaApi = {
+  getLogs: () =>
+    apiFetch<{ logs: FreelaDailyLog[] }>('/freela/logs'),
+
+  upsertLog: (data: {
+    id?: string
+    platform: string
+    date: string
+    proposals: number
+    responses: number
+    appointments: number
+    notes?: string
+  }) =>
+    apiFetch<{ log: FreelaDailyLog }>('/freela/logs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  deleteLog: (id: string) =>
+    apiFetch(`/freela/logs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+}

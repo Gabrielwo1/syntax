@@ -48,6 +48,7 @@ import LogFuncoes from './pages/LogFuncoes'
 import CopyPage from './pages/Copy'
 import Meetings from './pages/Meetings'
 import Prospeccao from './pages/Prospeccao'
+import FreelaSites from './pages/FreelaSites'
 
 function LoadingSpinner() {
   return (
@@ -182,6 +183,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Prospeccao />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/freela-sites"
+        element={
+          <ProtectedRoute>
+            <FreelaSites />
           </ProtectedRoute>
         }
       />
