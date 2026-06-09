@@ -17,16 +17,17 @@ import type { AppUser } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 
 const PERMISSION_LIST = [
-  { key: 'analytics', label: 'Analytics' },
-  { key: 'crm', label: 'CRM' },
-  { key: 'financeiro', label: 'Financeiro' },
-  { key: 'tarefas', label: 'Tarefas' },
-  { key: 'pdfs', label: 'PDFs' },
-  { key: 'repositorio', label: 'Repositório' },
+  { key: 'analytics',    label: 'Analytics' },
+  { key: 'crm',          label: 'CRM' },
+  { key: 'financeiro',   label: 'Financeiro' },
+  { key: 'tarefas',      label: 'Tarefas' },
+  { key: 'pdfs',         label: 'PDFs' },
+  { key: 'repositorio',  label: 'Repositório' },
   { key: 'social-media', label: 'Social Media' },
-  { key: 'orcamento', label: 'Orçamentos' },
-  { key: 'copy', label: 'Copy' },
-  { key: 'reunioes', label: 'Reuniões' },
+  { key: 'orcamento',    label: 'Orçamentos' },
+  { key: 'copy',         label: 'Copy' },
+  { key: 'reunioes',     label: 'Reuniões' },
+  { key: 'freela-sites', label: 'Freela Sites' },
 ]
 
 interface UserFormData {
