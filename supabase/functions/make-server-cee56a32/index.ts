@@ -13,7 +13,7 @@ app.use(
   "/*",
   cors({
     origin: "*",
-    allowHeaders: ["Content-Type", "Authorization", "apikey", "X-Agent-Key"],
+    allowHeaders: ["Content-Type", "Authorization", "apikey", "X-Agent-Key", "x-supabase-api-version"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
