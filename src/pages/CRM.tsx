@@ -51,7 +51,7 @@ function whatsappUrl(phone?: string | null): string | null {
 
 // ─── AI extraction helpers ────────────────────────────────────────────────────
 
-const EXTRACT_URL = 'https://thcjrzluhsbgtbirdoxl.supabase.co/functions/v1/make-server-cee56a32/crm/ai-extract'
+const EXTRACT_URL = 'https://jnfpulrlnrnuwnbtdbzt.supabase.co/functions/v1/make-server-cee56a32/crm/ai-extract'
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {

@@ -50,7 +50,7 @@ function StatCard({ title, value, icon, color, subtitle }: { title: string; valu
 }
 
 function TrackingModal({ site, onClose }: { site: Site; onClose: () => void }) {
-  const code = site.trackingCode || `<!-- Syntax Analytics -->\n<script>\n(function(){\n  var s=document.createElement('script');\n  s.src='https://thcjrzluhsbgtbirdoxl.supabase.co/functions/v1/make-server-cee56a32/tracker.js';\n  s.dataset.siteId='${site.id}';\n  document.head.appendChild(s);\n})();\n</script>`
+  const code = site.trackingCode || `<!-- Syntax Analytics -->\n<script>\n(function(){\n  var s=document.createElement('script');\n  s.src='https://jnfpulrlnrnuwnbtdbzt.supabase.co/functions/v1/make-server-cee56a32/tracker.js';\n  s.dataset.siteId='${site.id}';\n  document.head.appendChild(s);\n})();\n</script>`
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-lg">

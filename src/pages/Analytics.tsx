@@ -17,7 +17,7 @@ import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
 function TrackingCodeModal({ site, onClose }: { site: Site; onClose: () => void }) {
-  const code = site.trackingCode || `<!-- Syntax Analytics - ${site.name} -->\n<script>\n(function(){\n  var s=document.createElement('script');\n  s.src='https://thcjrzluhsbgtbirdoxl.supabase.co/functions/v1/make-server-cee56a32/tracker.js';\n  s.dataset.siteId='${site.id}';\n  document.head.appendChild(s);\n})();\n</script>`
+  const code = site.trackingCode || `<!-- Syntax Analytics - ${site.name} -->\n<script>\n(function(){\n  var s=document.createElement('script');\n  s.src='https://jnfpulrlnrnuwnbtdbzt.supabase.co/functions/v1/make-server-cee56a32/tracker.js';\n  s.dataset.siteId='${site.id}';\n  document.head.appendChild(s);\n})();\n</script>`
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code).then(() => toast.success('Código copiado!')).catch(() => toast.error('Erro ao copiar'))
