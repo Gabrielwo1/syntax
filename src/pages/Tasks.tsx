@@ -1,14 +1,15 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, useMemo } from 'react'
 import {
   Plus, X, Loader2, CheckCircle2,
   Trash2, Sparkles, Calendar, User, Briefcase,
   LayoutGrid, Search, ChevronDown,
   FileText, Pencil, ChevronRight,
   Paperclip, Upload, Filter, ArrowUpDown,
-  MoreHorizontal, Hash, Timer, AlertCircle, Clock, PlayCircle,
+  MoreHorizontal, Hash, Timer, AlertCircle,
+  PlayCircle, Settings2, Zap, FolderPlus,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { format, parseISO, isPast, differenceInDays, startOfDay } from 'date-fns'
+import { format, parseISO, isPast, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { tasksApi, taskSprintsApi, authApi, repoApi } from '../lib/api'
 import type { Task, TaskSprint, AppUser } from '../lib/api'
@@ -60,6 +61,11 @@ function apiToLocal(t: Task): LocalTask {
 function fmtDate(d?: string) {
   if (!d) return ''
   try { return format(parseISO(d), "dd/MM", { locale: ptBR }) } catch { return d }
+}
+
+function fmtDateFull(d?: string) {
+  if (!d) return ''
+  try { return format(parseISO(d), "dd/MM/yyyy", { locale: ptBR }) } catch { return d }
 }
 
 function isOverdue(due?: string, status?: TaskStatus) {
@@ -124,16 +130,16 @@ function ProjectCombobox({ value, onChange, projects, cls }: { value: string; on
 
 // ─── Task Modal ───────────────────────────────────────────────────────────────
 
-function TaskModal({ task, onClose, onSaved, sprints, defaultProject, users, allProjects }: {
+function TaskModal({ task, onClose, onSaved, sprints, defaultProject, defaultSprintId, users, allProjects }: {
   task?: LocalTask | null; onClose: () => void; onSaved: (t: LocalTask) => void
-  sprints: TaskSprint[]; defaultProject?: string; users: AppUser[]; allProjects: string[]
+  sprints: TaskSprint[]; defaultProject?: string; defaultSprintId?: string; users: AppUser[]; allProjects: string[]
 }) {
   const [form, setForm] = useState<Omit<LocalTask, 'id' | 'createdAt' | 'completedAt'>>({
     name: task?.name ?? '', project: task?.project ?? defaultProject ?? '',
     description: task?.description ?? '', status: task?.status ?? 'not_started',
     priority: task?.priority ?? 'medium', due: task?.due ?? '',
     assignee: task?.assignee ?? '', tags: task?.tags ?? [],
-    estimatedHours: task?.estimatedHours, sprintId: task?.sprintId ?? '',
+    estimatedHours: task?.estimatedHours, sprintId: task?.sprintId ?? defaultSprintId ?? '',
     attachments: task?.attachments ?? [],
   })
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
@@ -190,9 +196,18 @@ function TaskModal({ task, onClose, onSaved, sprints, defaultProject, users, all
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelCls}>Projeto / Seção</label>
+                <label className={labelCls}>Projeto</label>
                 <ProjectCombobox value={form.project} onChange={v => set('project', v)} projects={allProjects} cls={inputCls} />
               </div>
+              <div>
+                <label className={labelCls}>Sprint</label>
+                <select value={form.sprintId} onChange={e => set('sprintId', e.target.value)} className={selectCls}>
+                  <option value="">Backlog</option>
+                  {sprints.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Responsável</label>
                 {users.length > 0 ? (
@@ -204,8 +219,6 @@ function TaskModal({ task, onClose, onSaved, sprints, defaultProject, users, all
                   <input value={form.assignee} onChange={e => set('assignee', e.target.value)} placeholder="Responsável" className={inputCls} />
                 )}
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Prioridade</label>
                 <select value={form.priority} onChange={e => set('priority', e.target.value as TaskPriority)} className={selectCls}>
@@ -215,6 +228,8 @@ function TaskModal({ task, onClose, onSaved, sprints, defaultProject, users, all
                   <option value="low">⚪ Baixa</option>
                 </select>
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Status</label>
                 <select value={form.status} onChange={e => set('status', e.target.value as TaskStatus)} className={selectCls}>
@@ -223,16 +238,14 @@ function TaskModal({ task, onClose, onSaved, sprints, defaultProject, users, all
                   <option value="done">Concluída</option>
                 </select>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Prazo</label>
                 <input type="date" value={form.due} onChange={e => set('due', e.target.value)} className={inputCls} />
               </div>
-              <div>
-                <label className={labelCls}>Horas Estimadas</label>
-                <input type="number" min={0} step={0.5} value={form.estimatedHours ?? ''} onChange={e => set('estimatedHours', e.target.value ? Number(e.target.value) : undefined)} placeholder="0" className={inputCls} />
-              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Horas Estimadas</label>
+              <input type="number" min={0} step={0.5} value={form.estimatedHours ?? ''} onChange={e => set('estimatedHours', e.target.value ? Number(e.target.value) : undefined)} placeholder="0" className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>Descrição</label>
@@ -362,10 +375,157 @@ function AIModal({ onClose, onGenerated }: { onClose: () => void; onGenerated: (
   )
 }
 
+// ─── Sprint Manager Modal ─────────────────────────────────────────────────────
+
+function SprintManagerModal({ sprints, onClose, onRefresh }: {
+  sprints: TaskSprint[]
+  onClose: () => void
+  onRefresh: (sprints: TaskSprint[]) => void
+}) {
+  const [creating, setCreating] = useState(false)
+  const [name, setName] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) { toast.error('Nome obrigatório'); return }
+    setSaving(true)
+    try {
+      const res = await taskSprintsApi.create({ name: name.trim(), startDate: startDate || undefined, endDate: endDate || undefined })
+      const newSprint = res.sprint
+      toast.success('Sprint criada!')
+      onRefresh([...sprints, newSprint])
+      setName(''); setStartDate(''); setEndDate(''); setCreating(false)
+    } catch { toast.error('Erro ao criar sprint') }
+    finally { setSaving(false) }
+  }
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id)
+    try {
+      await taskSprintsApi.delete(id)
+      toast.success('Sprint removida')
+      onRefresh(sprints.filter(s => s.id !== id))
+    } catch { toast.error('Erro ao remover sprint') }
+    finally { setDeletingId(null) }
+  }
+
+  const inputCls = "w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-50 placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+        <div className="flex items-center justify-between p-5 border-b border-zinc-800">
+          <div className="flex items-center gap-2">
+            <PlayCircle className="w-5 h-5 text-emerald-400" />
+            <h2 className="text-lg font-semibold text-zinc-50">Gerenciar Sprints</h2>
+          </div>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-50 transition-colors p-1"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-3">
+          {sprints.length === 0 && !creating && (
+            <div className="text-center py-8 text-zinc-600 text-sm">Nenhuma sprint criada ainda</div>
+          )}
+          {sprints.map(s => (
+            <div key={s.id} className="flex items-center gap-3 p-3 bg-zinc-800/60 rounded-xl border border-zinc-700/50">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-zinc-100">{s.name}</p>
+                {(s.startDate || s.endDate) && (
+                  <p className="text-xs text-zinc-500 mt-0.5 flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    {s.startDate ? fmtDateFull(s.startDate) : '—'} → {s.endDate ? fmtDateFull(s.endDate) : '—'}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => handleDelete(s.id)}
+                disabled={deletingId === s.id}
+                className="p-1.5 text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"
+              >
+                {deletingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          ))}
+
+          {creating ? (
+            <form onSubmit={handleCreate} className="p-3 bg-zinc-800/40 rounded-xl border border-emerald-500/20 space-y-3">
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome da sprint (ex: Sprint 1)" className={inputCls} autoFocus />
+              <div className="grid grid-cols-2 gap-2">
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={inputCls} />
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className={inputCls} />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button type="button" onClick={() => setCreating(false)} className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-50 transition-colors">Cancelar</button>
+                <button type="submit" disabled={saving} className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition-all disabled:opacity-50">
+                  {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}Criar
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              onClick={() => setCreating(true)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-emerald-400 hover:text-emerald-300 border border-dashed border-emerald-500/20 hover:border-emerald-500/40 rounded-xl transition-all"
+            >
+              <Plus className="w-4 h-4" />Nova Sprint
+            </button>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-zinc-800">
+          <button onClick={onClose} className="w-full py-2 text-sm text-zinc-400 hover:text-zinc-50 transition-colors">Fechar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Add Project Modal ────────────────────────────────────────────────────────
+
+function AddProjectModal({ onClose, onAdd }: { onClose: () => void; onAdd: (name: string) => void }) {
+  const [name, setName] = useState('')
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => { ref.current?.focus() }, [])
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const n = name.trim()
+    if (!n) return
+    onAdd(n)
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-6">
+        <h2 className="text-base font-semibold text-zinc-50 mb-4">Novo Projeto</h2>
+        <form onSubmit={submit} className="space-y-4">
+          <input
+            ref={ref}
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="Nome do projeto..."
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+          />
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-50 transition-colors">Cancelar</button>
+            <button type="submit" disabled={!name.trim()} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-xl transition-all disabled:opacity-50">
+              Criar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ─── Detail Panel ─────────────────────────────────────────────────────────────
 
-function DetailPanel({ task, onClose, onEdit, onDelete, onChange }: {
-  task: LocalTask; onClose: () => void; onEdit: () => void; onDelete: () => void; onChange: (t: LocalTask) => void
+function DetailPanel({ task, sprints, onClose, onEdit, onDelete, onChange }: {
+  task: LocalTask; sprints: TaskSprint[]; onClose: () => void; onEdit: () => void; onDelete: () => void; onChange: (t: LocalTask) => void
 }) {
   const [desc, setDesc] = useState(task.description)
   const [deleting, setDeleting] = useState(false)
@@ -373,7 +533,8 @@ function DetailPanel({ task, onClose, onEdit, onDelete, onChange }: {
   useEffect(() => { setDesc(task.description) }, [task.id])
 
   const PRIORITY_LABEL: Record<TaskPriority, string> = { urgent: '🔴 Urgente', high: '🟠 Alta', medium: '🔵 Média', low: '⚪ Baixa' }
-  const STATUS_LABEL: Record<TaskStatus, string> = { not_started: 'Não Iniciada', in_progress: 'Em Andamento', done: 'Concluída' }
+
+  const sprintName = task.sprintId ? sprints.find(s => s.id === task.sprintId)?.name : null
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -404,7 +565,10 @@ function DetailPanel({ task, onClose, onEdit, onDelete, onChange }: {
       <div className="flex-1 overflow-y-auto p-5 space-y-5">
         <div>
           <p className="text-base font-bold text-zinc-50 leading-snug">{task.name}</p>
-          {task.project && <div className="flex items-center gap-1.5 mt-1"><Briefcase className="w-3.5 h-3.5 text-zinc-500" /><span className="text-sm text-zinc-400">{task.project}</span></div>}
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            {task.project && <div className="flex items-center gap-1.5 text-xs bg-zinc-800 text-zinc-400 px-2 py-1 rounded-lg border border-zinc-700"><Briefcase className="w-3 h-3" />{task.project}</div>}
+            {sprintName && <div className="flex items-center gap-1.5 text-xs bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded-lg border border-emerald-500/20"><PlayCircle className="w-3 h-3" />{sprintName}</div>}
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -476,9 +640,7 @@ function InlineAddRow({ project, onAdd }: { project: string; onAdd: (name: strin
     if (!name.trim()) { setActive(false); return }
     setSaving(true)
     await onAdd(name.trim(), project)
-    setName('')
-    setSaving(false)
-    setActive(false)
+    setName(''); setSaving(false); setActive(false)
   }
 
   if (!active) {
@@ -495,10 +657,7 @@ function InlineAddRow({ project, onAdd }: { project: string; onAdd: (name: strin
 
   return (
     <div className="flex items-center gap-3 py-2.5 px-4 pl-10 border-t border-zinc-800/30 bg-zinc-900/40">
-      {saving
-        ? <Loader2 className="w-4 h-4 text-zinc-500 animate-spin flex-shrink-0" />
-        : <div className="w-4 h-4 rounded-full border-2 border-zinc-600 flex-shrink-0" />
-      }
+      {saving ? <Loader2 className="w-4 h-4 text-zinc-500 animate-spin flex-shrink-0" /> : <div className="w-4 h-4 rounded-full border-2 border-zinc-600 flex-shrink-0" />}
       <input
         ref={ref}
         value={name}
@@ -508,23 +667,24 @@ function InlineAddRow({ project, onAdd }: { project: string; onAdd: (name: strin
         placeholder="Nome da tarefa"
         className="flex-1 bg-transparent text-sm text-zinc-100 placeholder:text-zinc-600 outline-none"
       />
-      <span className="text-xs text-zinc-600 hidden sm:block">Enter para salvar · Esc para cancelar</span>
+      <span className="text-xs text-zinc-600 hidden sm:block">Enter · Esc</span>
     </div>
   )
 }
 
-// ─── Asana List View ──────────────────────────────────────────────────────────
+// ─── Task List View ───────────────────────────────────────────────────────────
 
-interface AsanaSection { label: string; tasks: LocalTask[] }
+interface TaskSection { label: string; tasks: LocalTask[] }
 
-function AsanaListView({
-  sections, onToggleDone, onSelect, onAddTask, selectedId,
+function TaskListView({
+  sections, onToggleDone, onSelect, onAddTask, selectedId, showProjectColumn,
 }: {
-  sections: AsanaSection[]
+  sections: TaskSection[]
   onToggleDone: (task: LocalTask) => void
   onSelect: (task: LocalTask) => void
   onAddTask: (name: string, project: string) => Promise<void>
   selectedId?: string
+  showProjectColumn?: boolean
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const toggleCollapse = (label: string) => setCollapsed(prev => ({ ...prev, [label]: !prev[label] }))
@@ -535,32 +695,35 @@ function AsanaListView({
         <div className="w-16 h-16 bg-zinc-800/50 rounded-2xl flex items-center justify-center mb-4 border border-zinc-700/50">
           <CheckCircle2 className="w-8 h-8 text-zinc-600" />
         </div>
-        <p className="text-base text-zinc-400 font-medium">Nenhuma tarefa ainda</p>
+        <p className="text-base text-zinc-400 font-medium">Nenhuma tarefa nesta visualização</p>
         <p className="text-sm text-zinc-600 mt-1">Clique em &ldquo;Adicionar tarefa&rdquo; para começar</p>
       </div>
     )
   }
 
+  const cols = showProjectColumn
+    ? '1fr 140px 160px 150px 36px'
+    : '1fr 160px 150px 36px'
+
   return (
     <div className="border border-zinc-800/60 rounded-xl overflow-hidden">
       {/* Column headers */}
-      <div className="grid border-b border-zinc-800 bg-zinc-900/60" style={{ gridTemplateColumns: '1fr 160px 150px 36px' }}>
+      <div className="grid border-b border-zinc-800 bg-zinc-900/60" style={{ gridTemplateColumns: cols }}>
         <div className="py-2.5 px-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">Nome</div>
+        {showProjectColumn && <div className="py-2.5 px-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5"><Briefcase className="w-3 h-3" />Projeto</div>}
         <div className="py-2.5 px-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5"><User className="w-3 h-3" />Responsável</div>
-        <div className="py-2.5 px-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5"><Calendar className="w-3 h-3" />Data de conclusão</div>
+        <div className="py-2.5 px-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5"><Calendar className="w-3 h-3" />Prazo</div>
         <div className="py-2.5 px-2 flex items-center justify-center"><Plus className="w-3.5 h-3.5 text-zinc-700" /></div>
       </div>
 
-      {/* Sections */}
       {sections.map((section, si) => {
         const isCollapsed = collapsed[section.label]
         return (
           <div key={section.label || si} className={si > 0 ? 'border-t border-zinc-800/60' : ''}>
-            {/* Section header */}
             {section.label && (
               <div
                 className="grid cursor-pointer hover:bg-zinc-800/30 transition-colors bg-zinc-900/20"
-                style={{ gridTemplateColumns: '1fr 160px 150px 36px' }}
+                style={{ gridTemplateColumns: cols }}
                 onClick={() => toggleCollapse(section.label)}
               >
                 <div className="py-2.5 px-4 flex items-center gap-2">
@@ -568,11 +731,11 @@ function AsanaListView({
                   <span className="text-sm font-semibold text-zinc-200">{section.label}</span>
                   <span className="text-[11px] text-zinc-600 bg-zinc-800/80 px-1.5 py-0.5 rounded-full">{section.tasks.length}</span>
                 </div>
+                {showProjectColumn && <div />}
                 <div /><div /><div />
               </div>
             )}
 
-            {/* Task rows */}
             {!isCollapsed && (
               <>
                 {section.tasks.map(task => {
@@ -585,28 +748,20 @@ function AsanaListView({
                     <div
                       key={task.id}
                       className={`grid border-t border-zinc-800/30 hover:bg-zinc-800/25 transition-colors cursor-pointer ${isSelected ? 'bg-zinc-800/40 border-l-2 border-l-emerald-500' : ''}`}
-                      style={{ gridTemplateColumns: '1fr 160px 150px 36px' }}
+                      style={{ gridTemplateColumns: cols }}
                       onClick={() => onSelect(task)}
                     >
-                      {/* Name cell */}
                       <div className={`py-2.5 px-4 flex items-center gap-3 ${section.label ? 'pl-10' : 'pl-5'}`}>
-                        {/* Circle checkbox */}
                         <button
                           onClick={e => { e.stopPropagation(); onToggleDone(task) }}
                           className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
                             done ? 'bg-emerald-500 border-emerald-500' : inProgress ? 'border-blue-500 hover:border-emerald-400' : 'border-zinc-600 hover:border-emerald-400'
                           }`}
                         >
-                          {done && (
-                            <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
+                          {done && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                           {inProgress && !done && <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
                         </button>
-                        <span className={`text-sm leading-snug ${done ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>
-                          {task.name}
-                        </span>
+                        <span className={`text-sm leading-snug ${done ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>{task.name}</span>
                         {task.tags.length > 0 && (
                           <div className="hidden lg:flex items-center gap-1 ml-1">
                             {task.tags.slice(0, 2).map(tag => (
@@ -616,7 +771,12 @@ function AsanaListView({
                         )}
                       </div>
 
-                      {/* Assignee cell */}
+                      {showProjectColumn && (
+                        <div className="py-2.5 px-3 flex items-center">
+                          {task.project ? <span className="text-xs text-zinc-500 truncate max-w-[120px]">{task.project}</span> : null}
+                        </div>
+                      )}
+
                       <div className="py-2.5 px-3 flex items-center">
                         {task.assignee ? (
                           <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0" title={task.assignee}>
@@ -629,7 +789,6 @@ function AsanaListView({
                         )}
                       </div>
 
-                      {/* Due date cell */}
                       <div className="py-2.5 px-3 flex items-center">
                         {task.due ? (
                           <span className={`text-xs ${overdue && !done ? 'text-rose-400 font-medium' : done ? 'text-zinc-600 line-through' : 'text-zinc-400'}`}>
@@ -642,8 +801,6 @@ function AsanaListView({
                     </div>
                   )
                 })}
-
-                {/* Inline add */}
                 <InlineAddRow project={section.label} onAdd={onAddTask} />
               </>
             )}
@@ -680,10 +837,7 @@ function KanbanView({ tasks, onSelect, onToggleDone }: { tasks: LocalTask[]; onS
                 return (
                   <div key={t.id} onClick={() => onSelect(t)} className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 cursor-pointer hover:border-zinc-700 hover:bg-zinc-800/50 transition-all">
                     <div className="flex items-start gap-3">
-                      <button
-                        onClick={e => { e.stopPropagation(); onToggleDone(t) }}
-                        className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${done ? 'bg-emerald-500 border-emerald-500' : 'border-zinc-600 hover:border-emerald-400'}`}
-                      >
+                      <button onClick={e => { e.stopPropagation(); onToggleDone(t) }} className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${done ? 'bg-emerald-500 border-emerald-500' : 'border-zinc-600 hover:border-emerald-400'}`}>
                         {done && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                       </button>
                       <div className="flex-1 min-w-0">
@@ -725,9 +879,17 @@ export default function Tasks() {
   const [showModal, setShowModal] = useState(false)
   const [modalTask, setModalTask] = useState<LocalTask | null>(null)
   const [showAI, setShowAI] = useState(false)
-  const [defaultProject, setDefaultProject] = useState('')
+  const [showSprintManager, setShowSprintManager] = useState(false)
+  const [showAddProject, setShowAddProject] = useState(false)
   const [sprints, setSprints] = useState<TaskSprint[]>([])
   const [users, setUsers] = useState<AppUser[]>([])
+
+  // Navigation state
+  const [selectedProject, setSelectedProject] = useState<string>('') // '' = all
+  const [selectedSprint, setSelectedSprint] = useState<string>('') // '' = all, '_backlog_' = no sprint
+
+  // Extra projects created via "+" (without tasks yet)
+  const [extraProjects, setExtraProjects] = useState<string[]>([])
 
   useEffect(() => {
     tasksApi.getTasks()
@@ -738,27 +900,56 @@ export default function Tasks() {
     authApi.getUsers().then(r => setUsers(r.users || [])).catch(() => {})
   }, [])
 
-  const projects = Array.from(new Set(tasks.map(t => t.project).filter(Boolean))) as string[]
+  // Projects from tasks + extra
+  const projects = useMemo(() => {
+    const fromTasks = Array.from(new Set(tasks.map(t => t.project).filter(Boolean))) as string[]
+    const all = Array.from(new Set([...fromTasks, ...extraProjects])).sort()
+    return all
+  }, [tasks, extraProjects])
 
-  const filtered = tasks.filter(t => {
-    if (!search) return true
-    const q = search.toLowerCase()
-    return t.name.toLowerCase().includes(q) || t.project.toLowerCase().includes(q) || t.assignee.toLowerCase().includes(q)
-  })
+  // Filtered tasks
+  const filtered = useMemo(() => {
+    let result = tasks
+    if (search) {
+      const q = search.toLowerCase()
+      result = result.filter(t => t.name.toLowerCase().includes(q) || t.project.toLowerCase().includes(q) || t.assignee.toLowerCase().includes(q))
+    }
+    if (selectedProject) result = result.filter(t => t.project === selectedProject)
+    if (selectedSprint === '_backlog_') result = result.filter(t => !t.sprintId)
+    else if (selectedSprint) result = result.filter(t => t.sprintId === selectedSprint)
+    return result
+  }, [tasks, search, selectedProject, selectedSprint])
 
-  // Build sections: group by project
-  const sections: AsanaSection[] = React.useMemo(() => {
+  // Build sections for list view
+  const sections: TaskSection[] = useMemo(() => {
+    if (selectedProject) {
+      // Within a project: group by sprint if sprint view, else flat
+      if (selectedSprint === '' && sprints.length > 0) {
+        const sprintMap = new Map<string, LocalTask[]>()
+        filtered.forEach(t => {
+          const sprint = t.sprintId ? (sprints.find(s => s.id === t.sprintId)?.name ?? 'Sprint') : 'Backlog'
+          if (!sprintMap.has(sprint)) sprintMap.set(sprint, [])
+          sprintMap.get(sprint)!.push(t)
+        })
+        const withSprint = sprints
+          .filter(s => sprintMap.has(s.name))
+          .map(s => ({ label: s.name, tasks: sprintMap.get(s.name)! }))
+        const backlog = sprintMap.get('Backlog') ? [{ label: 'Backlog', tasks: sprintMap.get('Backlog')! }] : []
+        return [...withSprint, ...backlog]
+      }
+      return [{ label: '', tasks: filtered }]
+    }
+    // All projects: group by project
     const map = new Map<string, LocalTask[]>()
     filtered.forEach(t => {
-      const key = t.project || ''
+      const key = t.project || 'Sem projeto'
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(t)
     })
-    // Sort: named projects first (alphabetically), then unnamed
-    const named = Array.from(map.entries()).filter(([k]) => k).sort(([a], [b]) => a.localeCompare(b))
-    const unnamed = Array.from(map.entries()).filter(([k]) => !k)
+    const named = Array.from(map.entries()).filter(([k]) => k !== 'Sem projeto').sort(([a], [b]) => a.localeCompare(b))
+    const unnamed = Array.from(map.entries()).filter(([k]) => k === 'Sem projeto')
     return [...named, ...unnamed].map(([label, tasks]) => ({ label, tasks }))
-  }, [filtered])
+  }, [filtered, selectedProject, selectedSprint, sprints])
 
   const handleSaved = (task: LocalTask) => {
     setTasks(prev => {
@@ -790,13 +981,21 @@ export default function Tasks() {
 
   const handleInlineAdd = async (name: string, project: string) => {
     try {
-      const saved = await tasksApi.createTask({ name, project: project || undefined, status: 'not_started' })
-      const local = apiToLocal(saved)
-      setTasks(prev => [...prev, local])
+      const effectiveProject = project || selectedProject || undefined
+      const effectiveSprint = selectedSprint && selectedSprint !== '_backlog_' ? selectedSprint : undefined
+      const saved = await tasksApi.createTask({ name, project: effectiveProject, status: 'not_started', sprintId: effectiveSprint })
+      setTasks(prev => [...prev, apiToLocal(saved)])
     } catch { toast.error('Erro ao criar tarefa') }
   }
 
-  const tabs = [
+  const activeSprint = selectedSprint && selectedSprint !== '_backlog_' ? sprints.find(s => s.id === selectedSprint) : null
+
+  // Stats for current view
+  const totalTasks = filtered.length
+  const doneTasks = filtered.filter(t => t.status === 'done').length
+  const progress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0
+
+  const viewTabs = [
     { key: 'list', label: 'Lista', icon: <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg> },
     { key: 'kanban', label: 'Quadro', icon: <LayoutGrid className="w-3.5 h-3.5" /> },
   ]
@@ -804,43 +1003,149 @@ export default function Tasks() {
   return (
     <div className="min-h-full bg-zinc-950 flex flex-col">
 
-      {/* Top bar */}
+      {/* ── Top bar with project tabs ── */}
       <div className="bg-zinc-900/80 border-b border-zinc-800 px-6 pt-4 pb-0 shrink-0">
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-lg font-semibold text-zinc-50">Tarefas</h1>
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowAI(true)} className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 border border-indigo-500/20 hover:border-indigo-500/40 bg-indigo-600/5 hover:bg-indigo-600/10 px-3 py-1.5 rounded-lg transition-all">
+            <button
+              onClick={() => setShowAI(true)}
+              className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 border border-indigo-500/20 hover:border-indigo-500/40 bg-indigo-600/5 hover:bg-indigo-600/10 px-3 py-1.5 rounded-lg transition-all"
+            >
               <Sparkles className="w-3.5 h-3.5" />IA
             </button>
           </div>
         </div>
-        {/* Tabs */}
+
+        {/* Project tabs */}
+        <div className="flex items-center gap-0 overflow-x-auto scrollbar-none">
+          <button
+            onClick={() => { setSelectedProject(''); setSelectedSprint('') }}
+            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors -mb-px ${
+              selectedProject === '' ? 'border-emerald-500 text-zinc-50' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            Todos os projetos
+          </button>
+          {projects.map(proj => (
+            <button
+              key={proj}
+              onClick={() => { setSelectedProject(proj); setSelectedSprint('') }}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors -mb-px max-w-[180px] ${
+                selectedProject === proj ? 'border-emerald-500 text-zinc-50' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <span className="truncate">{proj}</span>
+            </button>
+          ))}
+          <button
+            onClick={() => setShowAddProject(true)}
+            className="flex items-center gap-1 px-3 py-2 text-sm text-zinc-600 hover:text-zinc-400 border-b-2 border-transparent -mb-px transition-colors whitespace-nowrap"
+            title="Novo projeto"
+          >
+            <FolderPlus className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Sprint bar ── */}
+      <div className="border-b border-zinc-800 px-6 py-2 flex items-center gap-2 bg-zinc-950/60 shrink-0 overflow-x-auto scrollbar-none">
+        <PlayCircle className="w-3.5 h-3.5 text-zinc-600 flex-shrink-0" />
+        <span className="text-xs text-zinc-600 font-medium mr-1 flex-shrink-0">Sprint:</span>
+
+        <button
+          onClick={() => setSelectedSprint('')}
+          className={`px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+            selectedSprint === '' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60'
+          }`}
+        >
+          Todos
+        </button>
+
+        {sprints.map(s => (
+          <button
+            key={s.id}
+            onClick={() => setSelectedSprint(s.id)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+              selectedSprint === s.id ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60'
+            }`}
+          >
+            {s.name}
+            {s.endDate && <span className="text-zinc-600 font-normal">· {fmtDate(s.endDate)}</span>}
+          </button>
+        ))}
+
+        <button
+          onClick={() => setSelectedSprint('_backlog_')}
+          className={`px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+            selectedSprint === '_backlog_' ? 'bg-zinc-700/80 text-zinc-300 border border-zinc-600' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60'
+          }`}
+        >
+          Backlog
+        </button>
+
+        <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+          {/* Progress indicator */}
+          {totalTasks > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="w-24 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-emerald-500 rounded-full transition-all"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <span className="text-xs text-zinc-600">{doneTasks}/{totalTasks}</span>
+            </div>
+          )}
+          <button
+            onClick={() => setShowSprintManager(true)}
+            className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 px-2 py-1 hover:bg-zinc-800 rounded-lg transition-all"
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+            Gerenciar
+          </button>
+        </div>
+      </div>
+
+      {/* ── Active sprint info bar ── */}
+      {activeSprint && (
+        <div className="border-b border-zinc-800 px-6 py-2 bg-emerald-500/5 flex items-center gap-3 shrink-0">
+          <Zap className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+          <span className="text-xs font-medium text-emerald-400">{activeSprint.name}</span>
+          {(activeSprint.startDate || activeSprint.endDate) && (
+            <span className="text-xs text-zinc-500">
+              {activeSprint.startDate ? fmtDateFull(activeSprint.startDate) : '—'} → {activeSprint.endDate ? fmtDateFull(activeSprint.endDate) : '—'}
+            </span>
+          )}
+          <span className="text-xs text-zinc-600 ml-auto">{doneTasks} de {totalTasks} concluídas</span>
+        </div>
+      )}
+
+      {/* ── Toolbar ── */}
+      <div className="border-b border-zinc-800 px-6 py-2.5 flex items-center gap-3 bg-zinc-950 shrink-0">
+        <button
+          onClick={() => { setModalTask(null); setShowModal(true) }}
+          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors shadow-sm"
+        >
+          <Plus className="w-4 h-4" />Adicionar uma tarefa
+          <ChevronDown className="w-3 h-3 opacity-60" />
+        </button>
+
+        <div className="w-px h-5 bg-zinc-800 mx-1" />
+
         <div className="flex items-center gap-0.5">
-          {tabs.map(tab => (
+          {viewTabs.map(tab => (
             <button
               key={tab.key}
               onClick={() => setView(tab.key as 'list' | 'kanban')}
-              className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                view === tab.key ? 'border-emerald-500 text-zinc-50' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                view === tab.key ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
               {tab.icon}{tab.label}
             </button>
           ))}
         </div>
-      </div>
-
-      {/* Toolbar */}
-      <div className="border-b border-zinc-800 px-6 py-2.5 flex items-center gap-3 bg-zinc-950 shrink-0">
-        <button
-          onClick={() => { setDefaultProject(''); setModalTask(null); setShowModal(true) }}
-          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors shadow-sm"
-        >
-          <Plus className="w-4 h-4" />Adicionar uma tarefa
-          <span className="ml-1 opacity-60"><ChevronDown className="w-3 h-3" /></span>
-        </button>
-
-        <div className="w-px h-5 bg-zinc-800 mx-1" />
 
         <button className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors px-2 py-1.5 rounded-lg hover:bg-zinc-800">
           <Filter className="w-3.5 h-3.5" />Filtrar
@@ -863,7 +1168,7 @@ export default function Tasks() {
         </div>
       </div>
 
-      {/* Content */}
+      {/* ── Content ── */}
       <div className={`flex-1 overflow-auto transition-all ${selectedTask ? 'pr-[380px]' : ''}`}>
         <div className="px-6 py-5">
           {loading ? (
@@ -871,12 +1176,13 @@ export default function Tasks() {
               <Loader2 className="w-7 h-7 animate-spin text-emerald-500" />
             </div>
           ) : view === 'list' ? (
-            <AsanaListView
+            <TaskListView
               sections={sections}
               onToggleDone={handleToggleDone}
               onSelect={t => setSelectedTask(prev => prev?.id === t.id ? null : t)}
               onAddTask={handleInlineAdd}
               selectedId={selectedTask?.id}
+              showProjectColumn={!selectedProject}
             />
           ) : (
             <KanbanView
@@ -888,10 +1194,11 @@ export default function Tasks() {
         </div>
       </div>
 
-      {/* Detail panel */}
+      {/* ── Detail panel ── */}
       {selectedTask && (
         <DetailPanel
           task={selectedTask}
+          sprints={sprints}
           onClose={() => setSelectedTask(null)}
           onEdit={() => { setModalTask(selectedTask); setShowModal(true) }}
           onDelete={() => handleDelete(selectedTask.id)}
@@ -899,14 +1206,15 @@ export default function Tasks() {
         />
       )}
 
-      {/* Modals */}
+      {/* ── Modals ── */}
       {showModal && (
         <TaskModal
           task={modalTask}
           onClose={() => { setShowModal(false); setModalTask(null) }}
           onSaved={handleSaved}
           sprints={sprints}
-          defaultProject={defaultProject}
+          defaultProject={selectedProject || undefined}
+          defaultSprintId={selectedSprint && selectedSprint !== '_backlog_' ? selectedSprint : undefined}
           users={users}
           allProjects={projects}
         />
@@ -915,6 +1223,23 @@ export default function Tasks() {
         <AIModal
           onClose={() => setShowAI(false)}
           onGenerated={newTasks => setTasks(prev => [...newTasks, ...prev])}
+        />
+      )}
+      {showSprintManager && (
+        <SprintManagerModal
+          sprints={sprints}
+          onClose={() => setShowSprintManager(false)}
+          onRefresh={updated => setSprints(updated)}
+        />
+      )}
+      {showAddProject && (
+        <AddProjectModal
+          onClose={() => setShowAddProject(false)}
+          onAdd={name => {
+            setExtraProjects(prev => prev.includes(name) ? prev : [...prev, name])
+            setSelectedProject(name)
+            setSelectedSprint('')
+          }}
         />
       )}
     </div>
