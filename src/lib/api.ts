@@ -1,6 +1,6 @@
 import { supabase, SUPABASE_ANON_KEY } from './supabase'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'https://jnfpulrlnrnuwnbtdbzt.supabase.co/functions/v1/make-server-cee56a32'
+const API_BASE = 'https://jnfpulrlnrnuwnbtdbzt.supabase.co/functions/v1/make-server-cee56a32'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
